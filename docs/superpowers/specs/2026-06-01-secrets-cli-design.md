@@ -1,4 +1,4 @@
-# `secrets` CLI — Design
+# `infinum-secrets` CLI — Design
 
 **Date:** 2026-06-01
 **Status:** Approved (pending spec review)
@@ -6,11 +6,14 @@
 ## Summary
 
 Wrap the existing 1Password bash scripts (`ios/.onepassword/{config,utils,read,write}.sh`)
-into an installable CLI named `secrets`, modeled on
+into an installable CLI named `infinum-secrets`, modeled on
 [`infinum/app-deploy-script`](https://github.com/infinum/app-deploy-script).
 
-A single entry point (`secrets`) dispatches subcommands (`read`, `write`, `init`,
-`doctor`, plus `--version` / `--update` / `--help`). The tool is installed globally
+The name is org-namespaced to avoid PATH/alias collisions with the generic word
+`secrets` (e.g. AWS `git-secrets`, dev aliases).
+
+A single entry point (`infinum-secrets`) dispatches subcommands (`read`, `write`,
+`init`, `doctor`, plus `--version` / `--update` / `--help`). The tool is installed globally
 via a curl-pipe-to-bash installer; each consuming project holds only a JSON config
 file. Read/write logic is shared and generic; platform differences (iOS vs Android)
 are expressed through the config `platform` field and a thin platform hook, not
@@ -42,7 +45,7 @@ duplicated scripts.
 ```
 mobile-onepassword-secrets/
 ├── install.sh                  # curl target: clone tmp + copy + chmod
-├── secrets.sh                  # entry point → installs as /usr/local/bin/secrets
+├── infinum-secrets.sh          # entry point → installs as /usr/local/bin/infinum-secrets
 ├── sources/
 │   ├── __constants.sh          # VERSION, install paths, source dir
 │   ├── __help.sh               # __help (heredoc)
@@ -75,11 +78,11 @@ Curl-pipe-to-bash, mirroring app-deploy:
 ```
 
 `install.sh`:
-1. `git clone --quiet <repo> .secrets_tmp`
-2. `cat .secrets_tmp/secrets.sh > <bindir>/secrets`
-3. `cp -a .secrets_tmp/sources/. <bindir>/.secrets-sources/`
+1. `git clone --quiet <repo> .infinum_secrets_tmp`
+2. `cat .infinum_secrets_tmp/infinum-secrets.sh > <bindir>/infinum-secrets`
+3. `cp -a .infinum_secrets_tmp/sources/. <bindir>/.infinum-secrets-sources/`
 4. `chmod +rx` on entry + sources
-5. `trap "rm -rf .secrets_tmp" EXIT`
+5. `trap "rm -rf .infinum_secrets_tmp" EXIT`
 6. Prompt `Do you want to proceed? [y/n]` unless `--silent`.
 
 **Install location:** default `/usr/local/bin`. Installer checks writability; if not
@@ -88,13 +91,13 @@ writable, it prints the `sudo` form or falls back to a user-writable dir on PATH
 
 ## Entry Point & Dispatch
 
-`secrets.sh` sources its libraries, then dispatches on `$1` (if/elif chain, matching
-app-deploy):
+`infinum-secrets.sh` sources its libraries, then dispatches on `$1` (if/elif chain,
+matching app-deploy):
 
 | Arg | Action |
 |-----|--------|
 | `-h` / `--help` | `__help` |
-| `-v` / `--version` | `echo "secrets $VERSION"` |
+| `-v` / `--version` | `echo "infinum-secrets $VERSION"` |
 | `--update` | `__script_auto_update` |
 | `init` | `__init "$@"` |
 | `read` | `__read "$@"` |
@@ -104,7 +107,7 @@ app-deploy):
 
 ## Configuration
 
-JSON file `secrets.config.json` in the project root, created by `secrets init`,
+JSON file `secrets.config.json` in the project root, created by `infinum-secrets init`,
 parsed with `jq`.
 
 ```json
@@ -149,7 +152,7 @@ current scripts already consume:
 This keeps `__read`/`__write`/`__op_utils` logic ~unchanged from today's scripts —
 only the config source changes (JSON-via-jq instead of sourcing `config.sh`).
 
-Missing config → error pointing user to `secrets init`.
+Missing config → error pointing user to `infinum-secrets init`.
 
 ## Shared Logic + Platform Hook
 
@@ -207,7 +210,7 @@ Single heredoc: usage, description, commands, examples.
 - `set -e` in entry + subcommand scripts (as today).
 - Missing `op`/`jq` → clear install instructions, non-zero exit (in `__op_utils.sh`
   + surfaced by `doctor`).
-- Missing/invalid config → message + `secrets init` hint.
+- Missing/invalid config → message + `infinum-secrets init` hint.
 - No vault access → graceful per-file skip with `[!]` notice (already present).
 - Filename failing env validation on write → hard error with the rule (already present).
 
@@ -231,8 +234,8 @@ Logic preserved; entry/exit reshaped from standalone `main "$@"` scripts into so
 
 ## Testing
 
-- Manual: `secrets init` → edit config → `secrets doctor` → `secrets read` →
-  `secrets write` against a test vault.
+- Manual: `infinum-secrets init` → edit config → `infinum-secrets doctor` →
+  `infinum-secrets read` → `infinum-secrets write` against a test vault.
 - Where feasible, factor pure helpers (glob matching `get_vault_for_file`,
   `match_environment`, JSON→array parsing) so they can be exercised with
   [bats](https://github.com/bats-core/bats-core) or simple assertion scripts.
