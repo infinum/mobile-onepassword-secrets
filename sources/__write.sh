@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
+# __write — uploads secret files from a local directory to 1Password.
+# shellcheck disable=SC2154
+# SC2154: path, environments, platform, CLI_NAME, bold, reset are runtime-injected
+# globals (loaded by load_config / setup_styles / entry point or tests).
 
-set -e
-
-# Load shared configuration (also defines bold/normal)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/utils.sh"
-
-usage() {
-    echo "Usage: $0 [-h] [directory]"
+__write_usage() {
+    echo "Usage: $CLI_NAME write [-h] [directory]"
     echo
     echo "Uploads secret files from a local directory to 1Password."
     echo
     echo "Arguments:"
-    echo "  directory   Optional. Name of the directory inside '$path' to upload."
+    echo "  directory   Optional. Name of the directory inside the configured path."
     echo "              If omitted, you will be prompted interactively."
     echo
     echo "Options:"
@@ -20,12 +18,11 @@ usage() {
     return 0
 }
 
-# Returns the matching environment from $environments for a given filename, or empty.
-# Match is anchored on dots, e.g. "Keys.production.swift" matches "production".
+# Returns the matching environment for a filename, anchored on dots, else non-zero.
 match_environment() {
     local file_name="$1"
     local env
-    for env in "${environments[@]}"; do
+    for env in "${environments[@]+"${environments[@]}"}"; do
         if [[ ".$file_name." == *.${env}.* ]]; then
             echo "$env"
             return 0
@@ -34,13 +31,18 @@ match_environment() {
     return 1
 }
 
-main() {
+__write() {
     local arg="${1:-}"
     if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
-        usage; exit 0
+        __write_usage; return 0
     fi
 
-    clear
+    require_tools || exit 1
+    setup_styles
+    load_config || exit 1
+    platform_validate "$platform" || exit 1
+
+    clear 2>/dev/null || true
     echo
     echo "###############################################################"
     echo "                       SECRET WRITE SCRIPT                     "
@@ -56,9 +58,8 @@ main() {
     echo "To write the files, specify which directory contains those files"
     echo "It will create appropriate 1password structure based on that information"
     echo
-    echo "${bold}NOTE:${normal} The directory itself must be placed inside '$path'"
+    echo "${bold}NOTE:${reset} The directory itself must be placed inside '$path'"
 
-    # Get directory from CLI arg or interactive prompt
     local dir="$arg"
     if [[ -n "$dir" ]]; then
         if [[ ! -d "$path/$dir" ]]; then
@@ -73,7 +74,6 @@ main() {
         done
     fi
 
-    # Determine which vaults are needed from file mappings
     echo
     local needed_vaults=()
     local file base_name mapped_vault
@@ -95,13 +95,11 @@ main() {
         exit 1
     fi
 
-    # Check write access for only the vaults that are actually needed
     local vault
     for vault in "${needed_vaults[@]}"; do
         detect_vault_access can_write_vault "write" "$vault"
     done
 
-    # Preview files with vault info and access status
     echo
     local has_files=false
     for file in "$path/$dir"/*; do
@@ -109,7 +107,6 @@ main() {
         if ! mapped_vault=$(get_vault_for_file "$base_name"); then
             continue
         fi
-
         if can_write_vault "$mapped_vault"; then
             echo "[+] $base_name → $mapped_vault"
             has_files=true
@@ -132,27 +129,22 @@ main() {
     echo "Uploading..."
     echo
 
-    # Upload files
     local file_path doc_name
     for file_path in "$path/$dir"/*; do
         base_name=$(basename "$file_path")
-
         if ! mapped_vault=$(get_vault_for_file "$base_name"); then
             continue
         fi
-
         if ! can_write_vault "$mapped_vault"; then
             continue
         fi
-
         if ! match_environment "$base_name" > /dev/null; then
             echo
             echo "Validation failed for '$file_path'"
-            echo "Name must contain one of the following environment descriptions: ${environments[*]}"
+            echo "Name must contain one of the following environment descriptions: ${environments[*]+"${environments[*]}"}"
             echo "Those environments must be separated by dots, e.g. my_file.staging.json"
             exit 1
         fi
-
         doc_name="${base_name%.*}"
         if op item get "$doc_name" --vault "$mapped_vault" > /dev/null 2>&1; then
             op document edit "$doc_name" "$file_path" --vault "$mapped_vault"
@@ -164,5 +156,3 @@ main() {
     echo "Done!"
     return 0
 }
-
-main "$@"

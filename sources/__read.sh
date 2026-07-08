@@ -1,31 +1,28 @@
 #!/usr/bin/env bash
+# __read — downloads secret files from 1Password into the local path.
+# shellcheck disable=SC2154
+# SC2154: path, files, environments, vaults, CLI_NAME, CONFIG_FILE_NAME are
+# runtime-injected globals (loaded by load_config or set in tests/entry point).
 
-set -e
-
-# Load shared configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/utils.sh"
-
-usage() {
-    echo "Usage: $0 [-h] [vault]"
+__read_usage() {
+    echo "Usage: $CLI_NAME read [-h] [vault]"
     echo
     echo "Downloads secret files from 1Password into the local vault directory."
     echo
     echo "Arguments:"
     echo "  vault   Optional. Filter downloads to a specific vault."
-    echo "          Available: ${vaults[*]}"
     echo
     echo "Options:"
     echo "  -h      Show this help message and exit."
     return 0
 }
 
-# Resolves a CLI vault arg to a configured vault name (case-insensitive). Echoes the matched vault on success.
+# Resolves a CLI vault arg to a configured vault name (case-insensitive).
 resolve_vault_filter() {
     local arg="$1"
     local arg_lc vault vault_lc
     arg_lc=$(to_lower "$arg")
-    for vault in "${vaults[@]}"; do
+    for vault in "${vaults[@]+"${vaults[@]}"}"; do
         vault_lc=$(to_lower "$vault")
         if [[ "$vault_lc" == "$arg_lc" ]]; then
             echo "$vault"
@@ -36,8 +33,8 @@ resolve_vault_filter() {
 }
 
 # Downloads <basename>.<env>.<ext> for each env in the given list.
-# Usage: generate_files <vault_filter> <filename> <env...>
-generate_files() {
+# Usage: __read_generate_files <vault_filter> <filename> <env...>
+__read_generate_files() {
     local vault_filter="$1"
     local file_arg="$2"
     shift 2
@@ -49,7 +46,7 @@ generate_files() {
     mkdir -p "$path/$name"
 
     local field
-    for field in "${fields[@]}"; do
+    for field in "${fields[@]+"${fields[@]}"}"; do
         local out_file="$name.$field.$extension"
 
         local vault mapped_vault
@@ -76,19 +73,26 @@ generate_files() {
     return 0
 }
 
-main() {
+__read() {
     local arg="${1:-}"
+    if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
+        __read_usage; return 0
+    fi
+
+    require_tools || exit 1
+    setup_styles
+    load_config || exit 1
+    platform_validate "$platform" || exit 1
+
     mkdir -p "$path"
 
     local vault_filter=""
     if [[ -n "$arg" ]]; then
-        if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
-            usage; exit 0
-        fi
         if ! vault_filter=$(resolve_vault_filter "$arg"); then
             echo "Invalid vault argument: $arg"
+            echo "Available: ${vaults[*]+"${vaults[*]}"}"
             echo
-            usage
+            __read_usage
             exit 1
         fi
         echo "Filtering to vault: $vault_filter"
@@ -102,26 +106,24 @@ main() {
     echo
 
     if [[ "${#files[@]}" -eq 0 ]]; then
-        echo "[!] No files configured in config.sh (files=())"
+        echo "[!] No files configured (files=[] in $CONFIG_FILE_NAME)"
         exit 1
     fi
 
     local entry name envs_csv
     local -a envs
-    for entry in "${files[@]}"; do
+    for entry in "${files[@]+"${files[@]}"}"; do
         name="${entry%:*}"
         envs_csv="${entry##*:}"
         if [[ "$envs_csv" == "*" ]]; then
-            envs=("${environments[@]}")
+            envs=("${environments[@]+"${environments[@]}"}")
         else
             IFS=',' read -r -a envs <<< "$envs_csv"
         fi
-        generate_files "$vault_filter" "$name" "${envs[@]}"
+        __read_generate_files "$vault_filter" "$name" "${envs[@]+"${envs[@]}"}"
     done
 
     echo
     echo "Done!"
     return 0
 }
-
-main "$@"
