@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # __read — downloads secret files from 1Password into the local path.
 # shellcheck disable=SC2154
-# SC2154: path, files, environments, vaults, CLI_NAME, CONFIG_FILE_NAME are
-# runtime-injected globals (loaded by load_config or set in tests/entry point).
+# SC2154: path, vaults, CLI_NAME are runtime-injected globals
+# (loaded by load_config or set in tests/entry point).
 
 __read_usage() {
     echo "Usage: $CLI_NAME read [-h] [vault]"
     echo
-    echo "Downloads secret files from 1Password into the local vault directory."
+    echo "Downloads secret files from 1Password into the local path."
+    echo "For each configured vault, lists its documents and downloads the ones"
+    echo "whose name matches that vault's patterns, preserving relative paths."
     echo
     echo "Arguments:"
-    echo "  vault   Optional. Filter downloads to a specific vault."
+    echo "  vault   Optional. Restrict the download to a single vault."
     echo
     echo "Options:"
     echo "  -h      Show this help message and exit."
@@ -32,44 +34,21 @@ resolve_vault_filter() {
     return 1
 }
 
-# Downloads <basename>.<env>.<ext> for each env in the given list.
-# Usage: __read_generate_files <vault_filter> <filename> <env...>
-__read_generate_files() {
-    local vault_filter="$1"
-    local file_arg="$2"
-    shift 2
-    local fields=("$@")
+# Lists documents in a vault and downloads those matching the vault's patterns.
+# The document title is treated as the file's path relative to $path.
+__read_pull_vault() {
+    local vault="$1"
+    local title dir
 
-    local extension="${file_arg##*.}"
-    local name
-    name=$(basename -s ".$extension" "$file_arg")
-    mkdir -p "$path/$name"
+    while IFS= read -r title; do
+        [[ -n "$title" ]] || continue
+        vault_matches_file "$vault" "$title" || continue
 
-    local field
-    for field in "${fields[@]+"${fields[@]}"}"; do
-        local out_file="$name.$field.$extension"
-
-        local vault mapped_vault
-        if mapped_vault=$(get_vault_for_file "$out_file"); then
-            vault="$mapped_vault"
-        else
-            echo "[!] No vault mapping for $out_file, skipping"
-            continue
-        fi
-
-        if [[ -n "$vault_filter" && "$vault" != "$vault_filter" ]]; then
-            continue
-        fi
-
-        if ! can_access_vault "$vault"; then
-            echo "[!] No access to '$vault', skipping $out_file"
-            continue
-        fi
-
-        local doc_name="${out_file%.*}"
-        op document get "$doc_name" --out-file "$path/$name/$out_file" --vault "$vault" --force
-        echo "[+] $out_file (from $vault)"
-    done
+        dir=$(dirname "$title")
+        mkdir -p "$path/$dir"
+        op document get "$title" --vault "$vault" --out-file "$path/$title" --force
+        echo "[+] $title (from $vault)"
+    done < <(op document list --vault "$vault" --format=json 2>/dev/null | jq -r '.[].title')
     return 0
 }
 
@@ -105,22 +84,16 @@ __read() {
     echo "Fetching configurations..."
     echo
 
-    if [[ "${#files[@]}" -eq 0 ]]; then
-        echo "[!] No files configured (files=[] in $CONFIG_FILE_NAME)"
-        exit 1
-    fi
-
-    local entry name envs_csv
-    local -a envs
-    for entry in "${files[@]+"${files[@]}"}"; do
-        name="${entry%:*}"
-        envs_csv="${entry##*:}"
-        if [[ "$envs_csv" == "*" ]]; then
-            envs=("${environments[@]+"${environments[@]}"}")
-        else
-            IFS=',' read -r -a envs <<< "$envs_csv"
+    local vault
+    for vault in "${vaults[@]+"${vaults[@]}"}"; do
+        if [[ -n "$vault_filter" && "$vault" != "$vault_filter" ]]; then
+            continue
         fi
-        __read_generate_files "$vault_filter" "$name" "${envs[@]+"${envs[@]}"}"
+        if ! can_access_vault "$vault"; then
+            echo "[!] No access to '$vault', skipping"
+            continue
+        fi
+        __read_pull_vault "$vault"
     done
 
     echo

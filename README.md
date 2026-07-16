@@ -23,23 +23,40 @@ Update later with `infinum-secrets --update`.
 ```bash
 infinum-secrets init --platform ios   # scaffold secrets.config.json
 infinum-secrets doctor                # check tooling, sign-in, vault access
-infinum-secrets read                  # download secrets into the configured path
+infinum-secrets read                  # download matching secrets into the path
 infinum-secrets read <vault>          # only from one vault
-infinum-secrets write <dir>           # upload a local dir's secrets
+infinum-secrets write [subdir]        # upload local secrets (optionally a subdir)
 ```
 
 ## Configuration (`secrets.config.json`)
 
+```json
+{
+  "platform": "ios",
+  "path": "ProjectName/SupportingFiles/Vault",
+  "vaults": [
+    { "name": "project-x-ios-staging", "patterns": ["*.staging.*", "*.dev.*"] },
+    { "name": "project-x-ios",         "patterns": ["*.production.*"] }
+  ]
+}
+```
+
 | Field | Type | Meaning |
 |-------|------|---------|
 | `platform` | string | `ios` or `android`. |
-| `path` | string | Local dir where secret files live. |
-| `environments` | string[] | Known envs; drives filename validation and `*` expansion. |
-| `vaults` | string[] | 1Password vaults for this project. |
-| `files` | object[] | `{ name, environments }`; `environments: ["*"]` = all. |
-| `fileVaults` | object[] | `{ pattern, vault }`; first glob match wins. |
+| `path` | string | Local root directory where secret files live. |
+| `vaults` | object[] | 1Password vaults. Each has a `name` and a list of glob `patterns`. |
+| `vaults[].patterns` | string[] | Globs matched against a file's path **relative to `path`**. First match (in vault, then pattern, order) wins. |
 
-Files are named `<base>.<env>.<ext>` (e.g. `Keys.production.swift`).
+A file is routed to the vault whose pattern it matches; its path relative to
+`path` is used as the 1Password document title, so `read` restores it to the same
+location. Patterns match on the relative path, so both `*.staging.*` and
+`*/production/*.swift` work.
+
+- `read` — for each vault, lists its documents and downloads the ones whose title
+  matches that vault's patterns.
+- `write [subdir]` — walks `path` (or `path/subdir`), routes each file to a vault
+  by pattern, and uploads it (title = relative path).
 
 ## Development
 

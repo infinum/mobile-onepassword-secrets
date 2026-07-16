@@ -19,14 +19,17 @@ Android a first-class platform.
 Answer these before writing code — they determine whether the shared logic suffices or needs
 Android-specific hooks.
 
-- [ ] **File/dir layout.** iOS stores `<base>.<env>.<ext>` under `path/<base>/`. What is the real
-      Android convention? Options seen in the wild:
-  - Per-flavor source sets: `app/src/<flavor>/` (e.g. `app/src/staging/google-services.json`)
-  - A single secrets dir with env-suffixed names (mirrors iOS)
-  - Gradle-consumed `secrets.properties` / `keystore.properties` at module root
-- [ ] **Env ↔ artifact mapping.** iOS maps env via the `<base>.<env>.<ext>` dotted filename. Does
-      Android map env by **flavor directory** instead of by filename? If so, the shared
-      `get_vault_for_file` (glob on filename) and `match_environment` (dotted) need an Android path.
+- [ ] **File/dir layout.** Files are routed by matching their path **relative to `path`** against a
+      vault's glob `patterns`; the relative path becomes the 1Password document title. What is the
+      real Android convention?
+  - Per-flavor source sets: `app/src/<flavor>/` (e.g. `app/src/staging/google-services.json`) —
+    expressible as patterns like `*/staging/*`, `*/production/*`.
+  - A single secrets dir with env-suffixed names (mirrors iOS) — `*.staging.*`, `*.production.*`.
+  - Gradle-consumed `secrets.properties` / `keystore.properties` at module root.
+- [ ] **Pattern expressiveness.** Confirm the chosen layout is expressible with the current relative-
+      path globs (`get_vault_for_file` / `vault_matches_file`). Per-flavor dirs and env-suffixed names
+      both are, so Android likely needs **no** new matching code — just the right `patterns` in the
+      config. Verify before assuming.
 - [ ] **Which files.** Typical Android secrets: `google-services.json`, `*.keystore` / `*.jks`,
       `keystore.properties`, `secrets.properties`, `local.properties` fragments. Confirm the set.
 - [ ] **Vault naming.** Confirm convention, e.g. `project-<name>-android`,
@@ -42,19 +45,18 @@ Once the layout is decided:
       [`sources/helpers/__platform.sh`](../sources/helpers/__platform.sh) to `return 0`.
 - [ ] **`platform_default_path`**: replace the placeholder `app/src/main/secrets` with the agreed
       real default.
-- [ ] **Platform hooks (only if Android diverges from iOS):** if env-by-flavor or a different naming
-      scheme is required, introduce hook functions so `__read`/`__write` stay generic. Candidates:
-  - `platform_expand_targets <file-entry>` → list of concrete (relative-path, env, vault) tuples
-  - `platform_local_path <base> <env> <ext>` → where the file lives locally
-  - `platform_match_environment <filename-or-path>` → env (replaces the iOS dotted match when the
-    platform is android)
-  Keep iOS behavior identical; branch on `$platform` inside the hooks, not scattered through the
+- [ ] **Platform hooks (only if Android genuinely diverges):** the config is now vault + patterns,
+      and read/write route purely on the relative-path glob match — which is platform-agnostic. Add a
+      hook only if Android needs something the pattern model can't express, e.g.:
+  - `platform_local_root` → a different local base than a flat `path` (e.g. per-module roots)
+  - `platform_document_title <relpath>` → a title scheme other than the relative path
+  Keep iOS behavior identical; branch on `$platform` inside the hook, not scattered through the
   command bodies. (Preserves the "shared logic, platform config" design.)
-- [ ] **Config template / `init`:** if Android needs a different default `files`/`fileVaults`
-      shape, have `init` emit an Android-specific template (e.g. `sources/secrets.config.android.json`)
-      selected by `--platform`, instead of only patching `platform`/`path`.
-- [ ] **`__config.sh`:** if the Android schema differs (e.g. flavor field), extend parsing +
-      required-key validation without breaking the iOS schema.
+- [ ] **Config template / `init`:** if Android wants different default vaults/patterns, have `init`
+      emit an Android-specific template (e.g. `sources/secrets.config.android.json`) selected by
+      `--platform`, instead of only patching `platform`/`path`.
+- [ ] **`__config.sh`:** only touch if the Android schema needs a genuinely new field. The current
+      `platform` + `path` + `vaults[{name,patterns}]` schema should cover per-flavor layouts as-is.
 
 ## Tests (bats)
 

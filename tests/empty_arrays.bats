@@ -23,10 +23,10 @@ setup() {
     [[ "$output" != *"unbound"* ]]
 }
 
-@test "match_environment does not crash with empty environments under set -u" {
+@test "vault_matches_file does not crash with empty file_vaults under set -u" {
     set -u
-    environments=()
-    run match_environment "Keys.staging.swift"
+    file_vaults=()
+    run vault_matches_file "v-any" "Keys.staging.swift"
     [ "$status" -ne 0 ]
     [[ "$output" != *"unbound"* ]]
 }

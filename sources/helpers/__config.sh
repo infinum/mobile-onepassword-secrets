@@ -2,7 +2,7 @@
 # sources/helpers/__config.sh
 # shellcheck disable=SC2034
 # Finds and parses secrets.config.json into bash vars/arrays.
-# Produces: platform, path (strings); environments, vaults, files, file_vaults (arrays).
+# Produces: platform, path (strings); vaults (vault names); file_vaults ("pattern:vault").
 
 # Locates the config file in the current directory.
 # Echoes the resolved path on success.
@@ -31,31 +31,35 @@ load_config() {
     fi
 
     local key
-    for key in platform path environments vaults files fileVaults; do
+    for key in platform path vaults; do
         if ! jq -e "has(\"$key\")" "$config_path" >/dev/null 2>&1; then
             echo "Error: config missing required key '$key' in $config_path." >&2
             return 1
         fi
     done
 
+    # Every vault entry must have a name and a non-empty patterns array.
+    if ! jq -e '.vaults | type == "array" and length > 0
+                and all(.[]; (.name | type == "string" and length > 0)
+                             and (.patterns | type == "array" and length > 0))' \
+            "$config_path" >/dev/null 2>&1; then
+        echo "Error: each vault in $config_path needs a non-empty 'name' and 'patterns'." >&2
+        return 1
+    fi
+
     platform=$(jq -r '.platform' "$config_path")
     path=$(jq -r '.path' "$config_path")
 
-    environments=()
-    while IFS= read -r line; do environments+=("$line"); done \
-        < <(jq -r '.environments[]' "$config_path")
-
+    # Vault names (used for access detection / filtering).
     vaults=()
     while IFS= read -r line; do vaults+=("$line"); done \
-        < <(jq -r '.vaults[]' "$config_path")
+        < <(jq -r '.vaults[].name' "$config_path")
 
-    files=()
-    while IFS= read -r line; do files+=("$line"); done \
-        < <(jq -r '.files[] | "\(.name):\(.environments | join(","))"' "$config_path")
-
+    # Flatten to "pattern:vault" entries, preserving vault + pattern order so
+    # first-match-wins is deterministic. Consumed by get_vault_for_file.
     file_vaults=()
     while IFS= read -r line; do file_vaults+=("$line"); done \
-        < <(jq -r '.fileVaults[] | "\(.pattern):\(.vault)"' "$config_path")
+        < <(jq -r '.vaults[] | .name as $v | .patterns[] | . + ":" + $v' "$config_path")
 
     return 0
 }

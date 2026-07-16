@@ -12,30 +12,19 @@ setup() {
     [ "$path" = "ProjectName/SupportingFiles/Vault" ]
 }
 
-@test "load_config parses environments array" {
-    load_config "$FIXTURE"
-    [ "${#environments[@]}" -eq 2 ]
-    [ "${environments[0]}" = "production" ]
-    [ "${environments[1]}" = "staging" ]
-}
-
-@test "load_config parses vaults array" {
+@test "load_config derives vault names in order" {
     load_config "$FIXTURE"
     [ "${#vaults[@]}" -eq 2 ]
-    [ "${vaults[0]}" = "project-projectname-ios" ]
+    [ "${vaults[0]}" = "project-projectname-ios-staging" ]
+    [ "${vaults[1]}" = "project-projectname-ios" ]
 }
 
-@test "load_config builds files as name:csv strings" {
+@test "load_config flattens vault patterns to pattern:vault, order preserved" {
     load_config "$FIXTURE"
-    [ "${#files[@]}" -eq 2 ]
-    [ "${files[0]}" = "Keys.swift:*" ]
-    [ "${files[1]}" = "Config.json:staging" ]
-}
-
-@test "load_config builds file_vaults as pattern:vault strings" {
-    load_config "$FIXTURE"
-    [ "${#file_vaults[@]}" -eq 2 ]
+    [ "${#file_vaults[@]}" -eq 3 ]
     [ "${file_vaults[0]}" = "*.staging.*:project-projectname-ios-staging" ]
+    [ "${file_vaults[1]}" = "*.dev.*:project-projectname-ios-staging" ]
+    [ "${file_vaults[2]}" = "*.production.*:project-projectname-ios" ]
 }
 
 @test "load_config fails on invalid JSON" {
@@ -49,9 +38,27 @@ setup() {
 
 @test "load_config fails on missing required key" {
     tmp="$(mktemp)"
-    echo '{"platform":"ios"}' > "$tmp"
+    echo '{"platform":"ios","path":"x"}' > "$tmp"
     run load_config "$tmp"
     rm -f "$tmp"
     [ "$status" -ne 0 ]
     [[ "$output" == *"missing required key"* ]]
+}
+
+@test "load_config fails when a vault has no patterns" {
+    tmp="$(mktemp)"
+    echo '{"platform":"ios","path":"x","vaults":[{"name":"v","patterns":[]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"non-empty"* ]]
+}
+
+@test "load_config fails when a vault has no name" {
+    tmp="$(mktemp)"
+    echo '{"platform":"ios","path":"x","vaults":[{"patterns":["*.x.*"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"non-empty"* ]]
 }

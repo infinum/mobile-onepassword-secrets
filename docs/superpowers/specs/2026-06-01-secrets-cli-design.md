@@ -114,43 +114,39 @@ parsed with `jq`.
 {
   "platform": "ios",
   "path": "ProjectName/SupportingFiles/Vault",
-  "environments": ["production", "staging"],
-  "vaults": ["project-projectname-ios", "project-projectname-ios-staging"],
-  "files": [
-    { "name": "Keys.swift", "environments": ["*"] }
-  ],
-  "fileVaults": [
-    { "pattern": "*.staging.*",    "vault": "project-projectname-ios-staging" },
-    { "pattern": "*.production.*", "vault": "project-projectname-ios" }
+  "vaults": [
+    { "name": "project-projectname-ios-staging", "patterns": ["*.staging.*", "*.dev.*"] },
+    { "name": "project-projectname-ios",         "patterns": ["*.production.*"] }
   ]
 }
 ```
+
+The schema is vault-centric: each vault owns the glob `patterns` that route files
+to it. This removes the earlier redundancy (a separate `environments` list, a
+`files` manifest, and a `fileVaults` map that named each vault twice).
 
 ### Field reference
 
 | Field | Type | Meaning |
 |-------|------|---------|
 | `platform` | string | `ios` or `android`. Selects defaults + platform hook. |
-| `path` | string | Local dir where secret files live. |
-| `environments` | string[] | Known envs; drives filename validation + `*` expansion. |
-| `vaults` | string[] | 1Password vaults for this project. |
-| `files` | object[] | `{ name, environments }`. `environments: ["*"]` = all. |
-| `fileVaults` | object[] | `{ pattern, vault }`. First glob match wins. |
+| `path` | string | Local root directory where secret files live. |
+| `vaults` | object[] | 1Password vaults. Each has a `name` and non-empty `patterns`. |
+| `vaults[].patterns` | string[] | Globs matched against a file's path relative to `path`. First match (vault order, then pattern order) wins. |
 
 ### Parsing (`helpers/__config.sh`)
 
-`__config.sh` locates `secrets.config.json` (project root / cwd), validates it is
-valid JSON with required keys, and converts it into the same bash variables the
-current scripts already consume:
+`__config.sh` locates `secrets.config.json` (cwd), validates it is valid JSON with
+required keys (`platform`, `path`, `vaults`) and that each vault has a non-empty
+`name` + `patterns`, then flattens it into bash variables:
 
-- `path` → string var
-- `environments` → bash array
-- `vaults` → bash array
-- `files` → bash array of `"name:env1,env2"` (or `"name:*"`) strings
-- `file_vaults` → bash array of `"pattern:vault"` strings
+- `platform`, `path` → string vars
+- `vaults` → bash array of vault **names**
+- `file_vaults` → bash array of `"pattern:vault"` strings (one per vault×pattern,
+  order preserved)
 
-This keeps `__read`/`__write`/`__op_utils` logic ~unchanged from today's scripts —
-only the config source changes (JSON-via-jq instead of sourcing `config.sh`).
+The flattened `file_vaults` keeps `get_vault_for_file` and the access helpers
+unchanged; only the config shape and the read/write file-discovery changed.
 
 Missing config → error pointing user to `infinum-secrets init`.
 
@@ -160,30 +156,31 @@ One generic `__read` and `__write`. The `platform` field drives `helpers/__platf
 which supplies platform-specific defaults/behavior where it genuinely differs:
 
 - Default `path` suggestion (used by `init`).
-- Filename pattern / parsing (iOS: `<base>.<env>.<ext>`).
-- Any structure-specific branch.
+- Any structure-specific branch (e.g. how a local file's relative path is derived).
 
-iOS path is implemented (matches current scripts). Android is a stub:
-`__platform.sh` has an `android` branch that currently errors with
-"Android support not yet implemented" so the seam exists without fake behavior.
+iOS is implemented. Android is a stub: `__platform.sh` has an `android` branch that
+currently errors with "Android support not yet implemented" so the seam exists
+without fake behavior.
 
 ## Commands
 
 ### `init`
-Writes `secrets.config.json` from the template, pre-filling platform-aware defaults
-(`path`, naming). Refuses to overwrite an existing config (requires explicit
-`--force`). Prints next steps.
+Writes `secrets.config.json` from the template, pre-filling the platform-aware
+default `path`. Refuses to overwrite an existing config (requires explicit
+`--force`). Prints next steps. Requires `jq` only (not `op`).
 
 ### `read [vault]`
-Behavior from current `read.sh`: downloads `<base>.<env>.<ext>` for each configured
-file/env into `path`, resolving vault per `fileVaults`. Optional `vault` arg filters
-to one vault (case-insensitive). Skips files where user lacks vault access. Config
+For each configured vault the user can access, lists its documents
+(`op document list`) and downloads the ones whose title matches that vault's
+patterns, writing each to `path/<title>` (the title is the file's path relative to
+`path`). Optional `vault` arg restricts to one vault (case-insensitive). Config
 loaded from JSON.
 
-### `write [dir]`
-Behavior from current `write.sh`: uploads files from `path/<dir>` to mapped vaults,
-validating filenames against `environments`, checking write access, previewing, and
-confirming before upload. `dir` optional (interactive prompt if omitted). Config
+### `write [subdir]`
+Walks `path` (or `path/<subdir>`), routes each file to a vault by matching its path
+relative to `path` against the vault patterns, checks write access, previews, and
+confirms before upload. Each file is uploaded with its relative path as the document
+title (so `read` restores it exactly). Files matching no pattern are skipped. Config
 loaded from JSON.
 
 ### `doctor` (alias `status`)
@@ -243,7 +240,13 @@ Logic preserved; entry/exit reshaped from standalone `main "$@"` scripts into so
 
 ## Open / Future
 
-- Android implementation (seam ready, branch stubbed).
+- Android implementation (seam ready, branch stubbed) — see
+  `docs/android-implementation-todo.md`.
 - Pinned-release `--update` with integrity verification.
 - Optional Homebrew tap as alternative install path.
+- **Document-title scheme:** documents are titled by the file's path relative to
+  `path` (e.g. `nested/Keys.staging.swift`). The legacy scripts titled by
+  `<base>.<env>` (extension/dir dropped). Vaults populated by the old scripts would
+  need re-uploading (`write`) to adopt the new titles; not an issue for the
+  placeholder vaults shipped here.
 ```

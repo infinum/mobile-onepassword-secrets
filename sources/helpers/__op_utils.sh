@@ -52,6 +52,23 @@ get_vault_for_file() {
     return 1
 }
 
+# Returns 0 if the given file (path relative to $path) matches any pattern
+# mapped to the given vault. Used by read to filter a vault's documents.
+vault_matches_file() {
+    local want_vault="$1" target="$2"
+    local entry pattern vault
+    for entry in "${file_vaults[@]+"${file_vaults[@]}"}"; do
+        vault="${entry##*:}"
+        [[ "$vault" == "$want_vault" ]] || continue
+        pattern="${entry%:*}"
+        # shellcheck disable=SC2053
+        if [[ "$target" == $pattern ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 _accessible_vaults=""
 _current_user_id=""
 
