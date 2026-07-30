@@ -63,7 +63,8 @@ app-secrets --update
 ## Usage
 
 ```bash
-app-secrets init          # scaffold a secrets.config.json in the current directory
+app-secrets init          # scaffold secrets.config.json and open it in your editor
+app-secrets init --no-open # scaffold without opening
 app-secrets doctor        # check tooling, sign-in status, and vault access
 app-secrets read          # download every configured file to its path
 app-secrets read <vault>  # restrict to one vault (its name or friendly label)
@@ -73,6 +74,10 @@ app-secrets --version     # print the version
 app-secrets --help        # full help
 ```
 
+- `init` writes the template and opens it in your editor. It prefers
+  `$APP_SECRETS_OPENER`, then `$VISUAL` / `$EDITOR`, then `open` (macOS) /
+  `xdg-open` (Linux). Pass `--no-open` to skip opening (opening is also skipped
+  when non-interactive, e.g. CI).
 - `read` fetches each configured file's document (by title) from its vault into
   that file's path, creating folders as needed. Vaults you can't access are
   skipped rather than failing the whole run.
