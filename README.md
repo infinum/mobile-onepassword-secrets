@@ -26,6 +26,7 @@ of files, and `read`/`write` sync them.
 * [Configuration](#configuration)
 * [Authentication](#authentication)
 * [Development](#development)
+* [Roadmap](#roadmap)
 * [Credits](#credits)
 
 ## Requirements
@@ -262,6 +263,30 @@ shellcheck app-secrets.sh install.sh sources/*.sh sources/helpers/*.sh
 > **bash 3.2.** macOS ships bash 3.2, so avoid `mapfile`/`readarray`, `${var,,}`,
 > and unguarded empty-array expansions. Guard arrays with `"${arr[@]+"${arr[@]}"}"`
 > and initialize them as `local -a x=()`.
+
+## Roadmap
+
+Planned and proposed improvements — contributions welcome.
+
+**Next up**
+
+- [ ] **Disambiguate same-named files in one vault.** The 1Password document title
+  is currently the file name, so two files that share a name but live in different
+  folders — a target-based layout, e.g. `Staging/GoogleService-Info.plist` and
+  `Production/GoogleService-Info.plist` — collide when they belong to the same vault.
+  Store each file's repo-relative path on the 1Password item as a custom field and
+  match on that instead of the title alone.
+- [ ] **Glob / folder patterns in `files`.** Once the path is stored on the item,
+  `read` can reconstruct each file's destination — which removes today's blocker — so
+  `files` could accept globs (e.g. `Vault/**/*.staging.*`), expanded on `write`.
+
+**Nice to have**
+
+- [ ] **Homebrew formula** declaring `op` + `jq` as dependencies (replaces the curl
+  installer and the runtime presence checks).
+- [ ] **Migration helper** for projects moving off the old Vault workflow — read the
+  existing vault config and generate a `secrets.config.json`. Likely an agent
+  prompt/skill rather than a bundled script.
 
 ## Credits
 
