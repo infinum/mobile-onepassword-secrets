@@ -1,7 +1,7 @@
 # tests/op_flow.bats
 # Exercises read/write end-to-end against a fake `op` on PATH. The shim records
-# every invocation to $OP_LOG and returns canned JSON, so we verify the
-# pattern -> vault routing and op-argument construction without a real
+# every invocation to $OP_LOG and returns canned output, so we verify routing,
+# document titles (full filename, no folder) and file placement without a real
 # 1Password account. `jq` is the real one.
 
 setup() {
@@ -14,12 +14,10 @@ setup() {
     OP_LOG="$WORKDIR/op.log"
     : > "$OP_LOG"
 
-    # Fake `op`: records args, returns canned output. bash 3.2 compatible.
     cat > "$SHIMBIN/op" <<'SHIM'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$OP_LOG"
 
-# extract the value following a flag, e.g. flag_val --vault  -> vault name
 flag_val() {
     local want="$1"; shift
     local prev=""
@@ -27,24 +25,16 @@ flag_val() {
         [ "$prev" = "$want" ] && { printf '%s' "$a"; return 0; }
         prev="$a"
     done
-    return 0
 }
 
-if [ "$1" = vault ] && [ "$2" = list ]; then
+if [ "$1" = whoami ]; then
+    echo '{"user_uuid":"u1"}'
+elif [ "$1" = vault ] && [ "$2" = list ]; then
     echo '[{"name":"v-staging"},{"name":"v-prod"}]'
 elif [ "$1" = vault ] && [ "$2" = user ] && [ "$3" = list ]; then
     echo '[{"id":"user-1","permissions":["allow_viewing","allow_editing"]}]'
 elif [ "$1" = user ] && [ "$2" = get ]; then
     echo '{"id":"user-1"}'
-elif [ "$1" = document ] && [ "$2" = list ]; then
-    v=$(flag_val --vault "$@")
-    if [ "$v" = v-staging ]; then
-        echo '[{"title":"Keys.staging.swift"},{"title":"Notes.dev.swift"},{"title":"random.txt"}]'
-    elif [ "$v" = v-prod ]; then
-        echo '[{"title":"Keys.production.swift"}]'
-    else
-        echo '[]'
-    fi
 elif [ "$1" = item ] && [ "$2" = get ]; then
     exit 1   # item does not exist -> write should `document create`
 elif [ "$1" = document ] && [ "$2" = get ]; then
@@ -60,11 +50,11 @@ SHIM
 
     cat > "$WORKDIR/secrets.config.json" <<'JSON'
 {
-  "platform": "ios",
-  "path": "vault",
   "vaults": [
-    { "name": "v-staging", "patterns": ["*.staging.*", "*.dev.*"] },
-    { "name": "v-prod",    "patterns": ["*.production.*"] }
+    { "name": "staging", "vault": "v-staging",
+      "files": ["Keys/Keys.staging.swift", "Config/Config.dev.json"] },
+    { "name": "prod", "vault": "v-prod",
+      "files": ["Keys/Keys.production.swift"] }
   ]
 }
 JSON
@@ -81,54 +71,58 @@ teardown() {
     rm -rf "$WORKDIR"
 }
 
-@test "read downloads only pattern-matching docs, preserving names" {
+@test "read fetches each file by full-filename title into its path" {
     run bash "$CLI" read
     [ "$status" -eq 0 ]
 
-    # Matched by *.staging.* / *.dev.* / *.production.*
-    [ -f "$WORKDIR/vault/Keys.staging.swift" ]
-    [ -f "$WORKDIR/vault/Notes.dev.swift" ]
-    [ -f "$WORKDIR/vault/Keys.production.swift" ]
+    [ -f "$WORKDIR/Keys/Keys.staging.swift" ]
+    [ -f "$WORKDIR/Config/Config.dev.json" ]
+    [ -f "$WORKDIR/Keys/Keys.production.swift" ]
 
-    # random.txt matches no vault pattern -> not downloaded.
-    [ ! -f "$WORKDIR/vault/random.txt" ]
-
-    grep -q "document get Keys.staging.swift --vault v-staging --out-file .* --force" "$OP_LOG"
-    grep -q "document get Keys.production.swift --vault v-prod --out-file .* --force" "$OP_LOG"
-    ! grep -q "document get random.txt" "$OP_LOG"
+    grep -q "document get Keys.staging.swift --vault v-staging --out-file Keys/Keys.staging.swift --force" "$OP_LOG"
+    grep -q "document get Config.dev.json --vault v-staging --out-file Config/Config.dev.json --force" "$OP_LOG"
+    grep -q "document get Keys.production.swift --vault v-prod --out-file Keys/Keys.production.swift --force" "$OP_LOG"
 }
 
-@test "read <vault> restricts to the requested vault" {
-    run bash "$CLI" read v-prod
+@test "read <label> restricts to that vault" {
+    run bash "$CLI" read prod
     [ "$status" -eq 0 ]
 
-    [ -f "$WORKDIR/vault/Keys.production.swift" ]
-    [ ! -f "$WORKDIR/vault/Keys.staging.swift" ]
-    ! grep -q "document list --vault v-staging" "$OP_LOG"
+    [ -f "$WORKDIR/Keys/Keys.production.swift" ]
+    [ ! -f "$WORKDIR/Keys/Keys.staging.swift" ]
+    ! grep -q "document get Keys.staging.swift" "$OP_LOG"
 }
 
-@test "write routes files to vaults by relative path and titles them by relpath" {
-    mkdir -p "$WORKDIR/vault/nested"
-    echo v > "$WORKDIR/vault/Keys.staging.swift"
-    echo v > "$WORKDIR/vault/nested/App.production.swift"
+@test "write uploads existing files titled by filename (no folder)" {
+    mkdir -p "$WORKDIR/Keys" "$WORKDIR/Config"
+    echo v > "$WORKDIR/Keys/Keys.staging.swift"
+    echo v > "$WORKDIR/Keys/Keys.production.swift"
+    echo v > "$WORKDIR/Config/Config.dev.json"
 
-    printf '\n\n' > "$WORKDIR/answers"
-    run bash "$CLI" write < "$WORKDIR/answers"
+    run bash "$CLI" write
     [ "$status" -eq 0 ]
 
-    grep -q "document create vault/Keys.staging.swift --title Keys.staging.swift --vault v-staging" "$OP_LOG"
-    grep -q "document create vault/nested/App.production.swift --title nested/App.production.swift --vault v-prod" "$OP_LOG"
+    grep -q "document create Keys/Keys.staging.swift --title Keys.staging.swift --vault v-staging" "$OP_LOG"
+    grep -q "document create Config/Config.dev.json --title Config.dev.json --vault v-staging" "$OP_LOG"
+    grep -q "document create Keys/Keys.production.swift --title Keys.production.swift --vault v-prod" "$OP_LOG"
+    ! grep -q -- "--title Keys/" "$OP_LOG"
 }
 
-@test "write skips unmapped files and uploads nothing when none match" {
-    mkdir -p "$WORKDIR/vault/Unmapped"
-    echo v > "$WORKDIR/vault/Unmapped/Keys.swift"   # no .staging./.dev./.production.
+@test "write <label> restricts to that vault" {
+    mkdir -p "$WORKDIR/Keys"
+    echo v > "$WORKDIR/Keys/Keys.staging.swift"
+    echo v > "$WORKDIR/Keys/Keys.production.swift"
 
-    printf '\n\n' > "$WORKDIR/answers"
-    run bash "$CLI" write < "$WORKDIR/answers"
+    run bash "$CLI" write staging
+    [ "$status" -eq 0 ]
 
+    grep -q "document create Keys/Keys.staging.swift --title Keys.staging.swift --vault v-staging" "$OP_LOG"
+    ! grep -q "Keys.production.swift" "$OP_LOG"
+}
+
+@test "write errors when no configured files exist locally" {
+    run bash "$CLI" write
     [ "$status" -ne 0 ]
-    [[ "$output" == *"No files matched any vault pattern"* ]]
+    [[ "$output" == *"No local files to upload"* ]]
     ! grep -q "document create" "$OP_LOG"
-    ! grep -q "document edit" "$OP_LOG"
 }

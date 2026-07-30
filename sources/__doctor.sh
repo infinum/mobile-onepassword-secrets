@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2154
-# SC2154: green, red, reset, platform, CLI_NAME, CONFIG_FILE_NAME are runtime
+# SC2154: green, red, reset, vaults, CLI_NAME, CONFIG_FILE_NAME are runtime
 #         globals injected by setup_styles / load_config / __constants.sh.
 # __doctor — diagnose environment, config, and vault access. (alias: status)
 
@@ -30,13 +30,24 @@ __doctor() {
     fi
     echo
 
-    # 2. 1Password sign-in (only if op present)
+    # 2. 1Password sign-in. Bounded so a locked/unresponsive op can't hang doctor.
     echo "1Password session:"
+    local signed_in=false
     if command -v op >/dev/null 2>&1; then
-        if op user get --me >/dev/null 2>&1; then
-            echo "  $ok signed in"
+        local rc=0
+        op_signed_in 8 || rc=$?
+        if [[ "$rc" -eq 0 ]]; then
+            if is_service_account; then
+                echo "  $ok signed in (service account)"
+            else
+                echo "  $ok signed in"
+            fi
+            signed_in=true
+        elif [[ "$rc" -eq 124 ]]; then
+            echo "  $bad 1Password did not respond in time — unlock the 1Password app, then run 'op signin'"
+            failures=$((failures + 1))
         else
-            echo "  $bad not signed in — run 'op signin'"
+            echo "  $bad not signed in — run 'op signin' (or set OP_SERVICE_ACCOUNT_TOKEN)"
             failures=$((failures + 1))
         fi
     else
@@ -66,7 +77,7 @@ __doctor() {
     echo "  $ok valid JSON"
 
     if load_config "$config_path" >/dev/null 2>&1; then
-        echo "  $ok all required keys present (platform: $platform)"
+        echo "  $ok valid ($((${#vaults[@]})) vault(s) configured)"
     else
         echo "  $bad config invalid:"
         load_config "$config_path" 2>&1 | sed 's/^/      /'
@@ -79,7 +90,7 @@ __doctor() {
 
     # 4. Vault access (needs op + sign-in)
     echo "Vault access (read):"
-    if command -v op >/dev/null 2>&1 && op user get --me >/dev/null 2>&1; then
+    if [[ "$signed_in" = true ]]; then
         print_vault_access can_access_vault
         echo
         echo "Vault access (write):"

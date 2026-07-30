@@ -4,6 +4,18 @@ setup() {
     export INFINUM_SECRETS_SOURCES="$REPO_ROOT/sources"
     CLI="$REPO_ROOT/infinum-secrets.sh"
     WORKDIR="$(mktemp -d)"
+
+    # Fast op shim so the session probe is deterministic and never touches the
+    # real 1Password (which can block on the desktop-app integration).
+    mkdir -p "$WORKDIR/bin"
+    cat > "$WORKDIR/bin/op" <<'SHIM'
+#!/usr/bin/env bash
+if [ "$1" = whoami ]; then echo '{"user_uuid":"u1"}'; fi
+exit 0
+SHIM
+    chmod +x "$WORKDIR/bin/op"
+    export PATH="$WORKDIR/bin:$PATH"
+
     cd "$WORKDIR"
 }
 teardown() {
@@ -20,4 +32,17 @@ teardown() {
     echo "{ broken" > "$WORKDIR/secrets.config.json"
     run bash "$CLI" doctor
     [[ "$output" == *"valid JSON"* || "$output" == *"invalid"* ]]
+}
+
+@test "doctor does not hang when op is unresponsive (bounded probe)" {
+    # An op that hangs forever must not hang doctor: the bounded probe kills it.
+    cat > "$WORKDIR/bin/op" <<'SHIM'
+#!/usr/bin/env bash
+# exec so the killed pid IS the sleep (no orphaned grandchild left behind).
+if [ "$1" = whoami ]; then exec sleep 300; fi
+exit 0
+SHIM
+    chmod +x "$WORKDIR/bin/op"
+    run bash "$CLI" doctor
+    [[ "$output" == *"did not respond"* ]]
 }

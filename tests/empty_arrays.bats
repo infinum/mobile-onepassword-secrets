@@ -1,32 +1,16 @@
 # tests/empty_arrays.bats
+# Guards against the bash 3.2 `set -u` unbound-array trap: expanding an empty
+# array as "${arr[@]}" aborts unless guarded with "${arr[@]+...}".
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
     source "$REPO_ROOT/sources/__constants.sh"
     source "$REPO_ROOT/sources/helpers/__op_utils.sh"
-    source "$REPO_ROOT/sources/__read.sh"
-    source "$REPO_ROOT/sources/__write.sh"
 }
 
-@test "get_vault_for_file does not crash with empty file_vaults under set -u" {
+@test "resolve_vault_filter does not crash with empty vault_aliases under set -u" {
     set -u
-    file_vaults=()
-    run get_vault_for_file "Keys.swift"
-    [ "$status" -ne 0 ]   # no match → non-zero, but must not be an 'unbound variable' abort
-    [[ "$output" != *"unbound"* ]]
-}
-
-@test "resolve_vault_filter does not crash with empty vaults under set -u" {
-    set -u
-    vaults=()
+    vault_aliases=()
     run resolve_vault_filter "anything"
-    [ "$status" -ne 0 ]
-    [[ "$output" != *"unbound"* ]]
-}
-
-@test "vault_matches_file does not crash with empty file_vaults under set -u" {
-    set -u
-    file_vaults=()
-    run vault_matches_file "v-any" "Keys.staging.swift"
     [ "$status" -ne 0 ]
     [[ "$output" != *"unbound"* ]]
 }

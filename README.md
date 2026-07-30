@@ -1,8 +1,8 @@
 # infinum-secrets
 
-CLI to sync project secrets between a local directory and 1Password vaults,
-driven by a per-project `secrets.config.json`. iOS is supported today; Android
-is scaffolded.
+CLI to sync project secrets between local files and 1Password vaults, driven by a
+per-project `secrets.config.json`. Stack-agnostic — works for iOS, Android, or any
+project that keeps secret files in the repo.
 
 ## Requirements
 
@@ -21,42 +21,68 @@ Update later with `infinum-secrets --update`.
 ## Usage
 
 ```bash
-infinum-secrets init --platform ios   # scaffold secrets.config.json
-infinum-secrets doctor                # check tooling, sign-in, vault access
-infinum-secrets read                  # download matching secrets into the path
-infinum-secrets read <vault>          # only from one vault
-infinum-secrets write [subdir]        # upload local secrets (optionally a subdir)
+infinum-secrets init          # scaffold secrets.config.json
+infinum-secrets doctor        # check tooling, sign-in, vault access
+infinum-secrets read          # download every configured file to its path
+infinum-secrets read <vault>  # only one vault (its name or friendly label)
+infinum-secrets write         # upload every configured file that exists locally
+infinum-secrets write <vault> # only one vault
 ```
+
+## Authentication
+
+Uses your `op` session. On CI, set a
+[service account token](https://developer.1password.com/docs/service-accounts/)
+— `op` picks up `OP_SERVICE_ACCOUNT_TOKEN` automatically (no desktop app, no
+prompts). Service accounts are read-only unless granted write access. Locally,
+sign in with `op signin` (with the 1Password app integration enabled).
 
 ## Configuration (`secrets.config.json`)
 
 ```json
 {
-  "platform": "ios",
-  "path": "ProjectName/SupportingFiles/Vault",
   "vaults": [
-    { "name": "project-x-ios-staging", "patterns": ["*.staging.*", "*.dev.*"] },
-    { "name": "project-x-ios",         "patterns": ["*.production.*"] }
+    {
+      "name": "staging",
+      "vault": "project-x-android-staging",
+      "files": ["secrets-staging.properties"]
+    },
+    {
+      "name": "production",
+      "vault": "project-x-android",
+      "files": ["secrets.properties"]
+    }
   ]
 }
 ```
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `platform` | string | `ios` or `android`. |
-| `path` | string | Local root directory where secret files live. |
-| `vaults` | object[] | 1Password vaults. Each has a `name` and a list of glob `patterns`. |
-| `vaults[].patterns` | string[] | Globs matched against a file's path **relative to `path`**. First match (in vault, then pattern, order) wins. |
+| `vaults` | object[] | The 1Password vaults, each owning a set of files. |
+| `vaults[].vault` | string | The 1Password vault name. |
+| `vaults[].name` | string | Optional friendly label (for `read <label>` / `write <label>`). |
+| `vaults[].files` | string[] | File paths (relative to the repo/CWD) that live in this vault. |
 
-A file is routed to the vault whose pattern it matches; its path relative to
-`path` is used as the 1Password document title, so `read` restores it to the same
-location. Patterns match on the relative path, so both `*.staging.*` and
-`*/production/*.swift` work.
+- Each entry in `files` is a real file path — put the folder in the path; files can
+  live anywhere (no single shared root is assumed).
+- The **1Password document title is the file name** (e.g. `secrets-staging.properties`,
+  `Keys.staging.swift`).
+- `read` fetches each configured file's document (by title) into that file's path,
+  creating folders as needed. `write` uploads each configured file that exists
+  locally. Both accept an optional vault (name or label) to scope to.
 
-- `read` — for each vault, lists its documents and downloads the ones whose title
-  matches that vault's patterns.
-- `write [subdir]` — walks `path` (or `path/subdir`), routes each file to a vault
-  by pattern, and uploads it (title = relative path).
+Example for a nested layout (e.g. iOS):
+
+```json
+{
+  "vaults": [
+    { "name": "staging", "vault": "project-x-ios-staging",
+      "files": ["ProjectName/SupportingFiles/Vault/Keys/Keys.staging.swift"] },
+    { "name": "production", "vault": "project-x-ios",
+      "files": ["ProjectName/SupportingFiles/Vault/Keys/Keys.production.swift"] }
+  ]
+}
+```
 
 ## Development
 

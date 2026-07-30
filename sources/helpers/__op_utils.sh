@@ -21,6 +21,44 @@ require_tools() {
     return 0
 }
 
+# Runs a command with a hard timeout, killing it (SIGKILL) if it overruns.
+# stdin is taken from /dev/null so a hidden prompt can't block. Output discarded.
+# `op` ignores soft signals while waiting on the desktop-app integration, so we
+# poll and SIGKILL — a soft timeout is not enough.
+# Usage: op_bounded <seconds> <command> [args...]  → command status, or 124 on timeout.
+op_bounded() {
+    local secs="$1"; shift
+    local pid waited=0 rc=0
+    "$@" </dev/null >/dev/null 2>&1 &
+    pid=$!
+    while kill -0 "$pid" 2>/dev/null; do
+        if [[ "$waited" -ge "$secs" ]]; then
+            kill -9 "$pid" 2>/dev/null
+            wait "$pid" 2>/dev/null || true
+            return 124
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    if wait "$pid"; then rc=0; else rc=$?; fi
+    return "$rc"
+}
+
+# Returns 0 if there is a usable 1Password session (bounded, non-interactive).
+# `op whoami` works for both personal sign-ins and service-account tokens
+# (unlike `op user get --me`, which fails for service accounts).
+# Returns 124 if op did not respond in time, or op's error status otherwise.
+op_signed_in() {
+    op_bounded "${1:-10}" op whoami
+}
+
+# True if a 1Password service-account token is configured. `op` uses it
+# automatically (CI-friendly, no desktop app). Service accounts have no user
+# identity, so user-based permission checks don't apply to them.
+is_service_account() {
+    [[ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]]
+}
+
 # Colors / styles. Gracefully degrade with no terminal (e.g. CI).
 # shellcheck disable=SC2034
 setup_styles() {
@@ -35,34 +73,22 @@ to_lower() {
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
-# Returns the mapped vault for a filename by matching file_vaults entries.
-# Each entry is "glob_pattern:vault". First match wins.
-get_vault_for_file() {
-    local file_name="$1"
-    local entry pattern vault
-    for entry in "${file_vaults[@]+"${file_vaults[@]}"}"; do
-        pattern="${entry%:*}"
-        vault="${entry##*:}"
-        # shellcheck disable=SC2053
-        if [[ "$file_name" == $pattern ]]; then
-            echo "$vault"
-            return 0
-        fi
-    done
-    return 1
+# The 1Password document title for a file path: its base name (with extension).
+# e.g. Keys/Keys.staging.swift -> Keys.staging.swift
+doc_title_for() {
+    echo "${1##*/}"
 }
 
-# Returns 0 if the given file (path relative to $path) matches any pattern
-# mapped to the given vault. Used by read to filter a vault's documents.
-vault_matches_file() {
-    local want_vault="$1" target="$2"
-    local entry pattern vault
-    for entry in "${file_vaults[@]+"${file_vaults[@]}"}"; do
+# Resolves a CLI arg (a vault name or friendly label) to the 1Password vault
+# name, using the vault_aliases map. Case-insensitive.
+resolve_vault_filter() {
+    local arg_lc key vault entry
+    arg_lc=$(to_lower "$1")
+    for entry in "${vault_aliases[@]+"${vault_aliases[@]}"}"; do
+        key="${entry%:*}"
         vault="${entry##*:}"
-        [[ "$vault" == "$want_vault" ]] || continue
-        pattern="${entry%:*}"
-        # shellcheck disable=SC2053
-        if [[ "$target" == $pattern ]]; then
+        if [[ "$(to_lower "$key")" == "$arg_lc" ]]; then
+            echo "$vault"
             return 0
         fi
     done
@@ -100,6 +126,11 @@ can_access_vault() {
 # Returns 0 if the current user has write (allow_editing) permission on the vault.
 can_write_vault() {
     local vault_name="$1"
+    # Service accounts have no user identity to introspect; assume writable and
+    # let `op` enforce on the actual write (they are read-only unless granted).
+    if is_service_account; then
+        return 0
+    fi
     local user_id
     user_id=$(_get_current_user_id)
     if [[ -z "$user_id" ]]; then

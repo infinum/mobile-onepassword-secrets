@@ -2,7 +2,8 @@
 # sources/helpers/__config.sh
 # shellcheck disable=SC2034
 # Finds and parses secrets.config.json into bash vars/arrays.
-# Produces: platform, path (strings); vaults (vault names); file_vaults ("pattern:vault").
+# Produces: vaults (1Password vault names); file_vaults ("relpath:vault");
+#           vault_aliases ("label:vault" and "vault:vault" for filtering).
 
 # Locates the config file in the current directory.
 # Echoes the resolved path on success.
@@ -30,36 +31,35 @@ load_config() {
         return 1
     fi
 
-    local key
-    for key in platform path vaults; do
-        if ! jq -e "has(\"$key\")" "$config_path" >/dev/null 2>&1; then
-            echo "Error: config missing required key '$key' in $config_path." >&2
-            return 1
-        fi
-    done
-
-    # Every vault entry must have a name and a non-empty patterns array.
-    if ! jq -e '.vaults | type == "array" and length > 0
-                and all(.[]; (.name | type == "string" and length > 0)
-                             and (.patterns | type == "array" and length > 0))' \
-            "$config_path" >/dev/null 2>&1; then
-        echo "Error: each vault in $config_path needs a non-empty 'name' and 'patterns'." >&2
+    if ! jq -e 'has("vaults")' "$config_path" >/dev/null 2>&1; then
+        echo "Error: config missing required key 'vaults' in $config_path." >&2
         return 1
     fi
 
-    platform=$(jq -r '.platform' "$config_path")
-    path=$(jq -r '.path' "$config_path")
+    # Every vault entry needs a non-empty 'vault' name and non-empty 'files'.
+    if ! jq -e '.vaults | type == "array" and length > 0
+                and all(.[]; (.vault | type == "string" and length > 0)
+                             and (.files | type == "array" and length > 0))' \
+            "$config_path" >/dev/null 2>&1; then
+        echo "Error: each vault in $config_path needs a non-empty 'vault' and 'files'." >&2
+        return 1
+    fi
 
-    # Vault names (used for access detection / filtering).
+    # 1Password vault names (used for access detection / the doctor table).
     vaults=()
     while IFS= read -r line; do vaults+=("$line"); done \
-        < <(jq -r '.vaults[].name' "$config_path")
+        < <(jq -r '.vaults[].vault' "$config_path")
 
-    # Flatten to "pattern:vault" entries, preserving vault + pattern order so
-    # first-match-wins is deterministic. Consumed by get_vault_for_file.
+    # "relpath:vault" per file. Consumed by read (fetch) and write (route).
     file_vaults=()
     while IFS= read -r line; do file_vaults+=("$line"); done \
-        < <(jq -r '.vaults[] | .name as $v | .patterns[] | . + ":" + $v' "$config_path")
+        < <(jq -r '.vaults[] | .vault as $v | .files[] | . + ":" + $v' "$config_path")
+
+    # "alias:vault" for the optional friendly name and the vault name itself,
+    # so `read <name>` and `read <vault>` both resolve.
+    vault_aliases=()
+    while IFS= read -r line; do vault_aliases+=("$line"); done \
+        < <(jq -r '.vaults[] | .vault as $v | ((.name // $v) + ":" + $v), ($v + ":" + $v)' "$config_path")
 
     return 0
 }

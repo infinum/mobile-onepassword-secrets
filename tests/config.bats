@@ -6,12 +6,6 @@ setup() {
     FIXTURE="$REPO_ROOT/tests/fixtures/valid.config.json"
 }
 
-@test "load_config parses scalars" {
-    load_config "$FIXTURE"
-    [ "$platform" = "ios" ]
-    [ "$path" = "ProjectName/SupportingFiles/Vault" ]
-}
-
 @test "load_config derives vault names in order" {
     load_config "$FIXTURE"
     [ "${#vaults[@]}" -eq 2 ]
@@ -19,12 +13,20 @@ setup() {
     [ "${vaults[1]}" = "project-projectname-ios" ]
 }
 
-@test "load_config flattens vault patterns to pattern:vault, order preserved" {
+@test "load_config flattens files to relpath:vault, order preserved" {
     load_config "$FIXTURE"
     [ "${#file_vaults[@]}" -eq 3 ]
-    [ "${file_vaults[0]}" = "*.staging.*:project-projectname-ios-staging" ]
-    [ "${file_vaults[1]}" = "*.dev.*:project-projectname-ios-staging" ]
-    [ "${file_vaults[2]}" = "*.production.*:project-projectname-ios" ]
+    [ "${file_vaults[0]}" = "Keys/Keys.staging.swift:project-projectname-ios-staging" ]
+    [ "${file_vaults[1]}" = "Config/Config.dev.json:project-projectname-ios-staging" ]
+    [ "${file_vaults[2]}" = "Keys/Keys.production.swift:project-projectname-ios" ]
+}
+
+@test "load_config builds aliases for label and vault name" {
+    load_config "$FIXTURE"
+    # label -> vault, and vault -> vault, for each entry
+    printf '%s\n' "${vault_aliases[@]}" | grep -qx "staging:project-projectname-ios-staging"
+    printf '%s\n' "${vault_aliases[@]}" | grep -qx "project-projectname-ios-staging:project-projectname-ios-staging"
+    printf '%s\n' "${vault_aliases[@]}" | grep -qx "production:project-projectname-ios"
 }
 
 @test "load_config fails on invalid JSON" {
@@ -36,27 +38,27 @@ setup() {
     [[ "$output" == *"not valid JSON"* ]]
 }
 
-@test "load_config fails on missing required key" {
+@test "load_config fails when 'vaults' is missing" {
     tmp="$(mktemp)"
-    echo '{"platform":"ios","path":"x"}' > "$tmp"
+    echo '{}' > "$tmp"
     run load_config "$tmp"
     rm -f "$tmp"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"missing required key"* ]]
+    [[ "$output" == *"missing required key 'vaults'"* ]]
 }
 
-@test "load_config fails when a vault has no patterns" {
+@test "load_config fails when a vault has no files" {
     tmp="$(mktemp)"
-    echo '{"platform":"ios","path":"x","vaults":[{"name":"v","patterns":[]}]}' > "$tmp"
+    echo '{"vaults":[{"vault":"v","files":[]}]}' > "$tmp"
     run load_config "$tmp"
     rm -f "$tmp"
     [ "$status" -ne 0 ]
     [[ "$output" == *"non-empty"* ]]
 }
 
-@test "load_config fails when a vault has no name" {
+@test "load_config fails when a vault has no vault name" {
     tmp="$(mktemp)"
-    echo '{"platform":"ios","path":"x","vaults":[{"patterns":["*.x.*"]}]}' > "$tmp"
+    echo '{"vaults":[{"files":["a.txt"]}]}' > "$tmp"
     run load_config "$tmp"
     rm -f "$tmp"
     [ "$status" -ne 0 ]

@@ -1,54 +1,20 @@
 #!/usr/bin/env bash
-# __read — downloads secret files from 1Password into the local path.
+# __read — downloads secret files from 1Password to their configured paths.
 # shellcheck disable=SC2154
-# SC2154: path, vaults, CLI_NAME are runtime-injected globals
-# (loaded by load_config or set in tests/entry point).
+# SC2154: vaults, file_vaults, vault_aliases, CLI_NAME are runtime-injected
+# globals (loaded by load_config or set in tests/entry point).
 
 __read_usage() {
     echo "Usage: $CLI_NAME read [-h] [vault]"
     echo
-    echo "Downloads secret files from 1Password into the local path."
-    echo "For each configured vault, lists its documents and downloads the ones"
-    echo "whose name matches that vault's patterns, preserving relative paths."
+    echo "Downloads each configured file from its 1Password vault to the file's"
+    echo "path (the document title is the file name). Creates folders as needed."
     echo
     echo "Arguments:"
-    echo "  vault   Optional. Restrict the download to a single vault."
+    echo "  vault   Optional. Restrict to one vault (its name or friendly label)."
     echo
     echo "Options:"
     echo "  -h      Show this help message and exit."
-    return 0
-}
-
-# Resolves a CLI vault arg to a configured vault name (case-insensitive).
-resolve_vault_filter() {
-    local arg="$1"
-    local arg_lc vault vault_lc
-    arg_lc=$(to_lower "$arg")
-    for vault in "${vaults[@]+"${vaults[@]}"}"; do
-        vault_lc=$(to_lower "$vault")
-        if [[ "$vault_lc" == "$arg_lc" ]]; then
-            echo "$vault"
-            return 0
-        fi
-    done
-    return 1
-}
-
-# Lists documents in a vault and downloads those matching the vault's patterns.
-# The document title is treated as the file's path relative to $path.
-__read_pull_vault() {
-    local vault="$1"
-    local title dir
-
-    while IFS= read -r title; do
-        [[ -n "$title" ]] || continue
-        vault_matches_file "$vault" "$title" || continue
-
-        dir=$(dirname "$title")
-        mkdir -p "$path/$dir"
-        op document get "$title" --vault "$vault" --out-file "$path/$title" --force
-        echo "[+] $title (from $vault)"
-    done < <(op document list --vault "$vault" --format=json 2>/dev/null | jq -r '.[].title')
     return 0
 }
 
@@ -61,9 +27,9 @@ __read() {
     require_tools || exit 1
     setup_styles
     load_config || exit 1
-    platform_validate "$platform" || exit 1
 
-    mkdir -p "$path"
+    # No sign-in precheck: op prompts for sign-in on its first call (via the
+    # 1Password app integration), or uses OP_SERVICE_ACCOUNT_TOKEN on CI.
 
     local vault_filter=""
     if [[ -n "$arg" ]]; then
@@ -84,16 +50,28 @@ __read() {
     echo "Fetching configurations..."
     echo
 
-    local vault
-    for vault in "${vaults[@]+"${vaults[@]}"}"; do
+    local entry rel vault title dir
+    for entry in "${file_vaults[@]+"${file_vaults[@]}"}"; do
+        rel="${entry%:*}"
+        vault="${entry##*:}"
+
         if [[ -n "$vault_filter" && "$vault" != "$vault_filter" ]]; then
             continue
         fi
         if ! can_access_vault "$vault"; then
-            echo "[!] No access to '$vault', skipping"
+            echo "[!] No access to '$vault', skipping $rel"
             continue
         fi
-        __read_pull_vault "$vault"
+
+        title=$(doc_title_for "$rel")
+        dir=$(dirname "$rel")
+        mkdir -p "$dir"
+
+        if op document get "$title" --vault "$vault" --out-file "$rel" --force; then
+            echo "[+] $rel (from $vault, document '$title')"
+        else
+            echo "[!] Could not fetch document '$title' from '$vault' for $rel"
+        fi
     done
 
     echo

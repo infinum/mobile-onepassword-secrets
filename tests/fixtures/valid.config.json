@@ -1,14 +1,14 @@
 {
-  "platform": "ios",
-  "path": "ProjectName/SupportingFiles/Vault",
   "vaults": [
     {
-      "name": "project-projectname-ios-staging",
-      "patterns": ["*.staging.*", "*.dev.*"]
+      "name": "staging",
+      "vault": "project-projectname-ios-staging",
+      "files": ["Keys/Keys.staging.swift", "Config/Config.dev.json"]
     },
     {
-      "name": "project-projectname-ios",
-      "patterns": ["*.production.*"]
+      "name": "production",
+      "vault": "project-projectname-ios",
+      "files": ["Keys/Keys.production.swift"]
     }
   ]
 }

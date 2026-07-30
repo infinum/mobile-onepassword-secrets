@@ -6,7 +6,6 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/infinum/mobile-onepassword-secrets.git"
-TMP_DIR=".infinum_secrets_tmp"
 BIN_NAME="infinum-secrets"
 SOURCES_NAME=".infinum-secrets-sources"
 
@@ -31,7 +30,7 @@ choose_bindir() {
 }
 
 main() {
-    local bindir rc use_sudo=""
+    local bindir rc use_sudo="" tmp
     bindir=$(choose_bindir) || rc=$?
     rc=${rc:-0}
     if [[ "$rc" -eq 2 ]]; then
@@ -45,15 +44,20 @@ main() {
         [[ "$answer" == "y" ]] || { echo "Aborted."; exit 0; }
     fi
 
-    trap 'rm -rf "$TMP_DIR"' EXIT
-    rm -rf "$TMP_DIR"
-    git clone --quiet "$REPO_URL" "$TMP_DIR"
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    git clone --quiet "$REPO_URL" "$tmp"
+
+    # Announce before overwriting an existing install.
+    if [[ -e "$bindir/$BIN_NAME" || -e "$bindir/$SOURCES_NAME" ]]; then
+        echo "Replacing existing install at $bindir."
+    fi
 
     # SC2086: $use_sudo is intentionally unquoted so that when empty it
     # expands to nothing (no sudo), and when set to "sudo" it becomes a
     # single word prefix. Quoting it would break the empty case.
     # shellcheck disable=SC2086
-    $use_sudo cp "$TMP_DIR/$BIN_NAME.sh" "$bindir/$BIN_NAME"
+    $use_sudo cp "$tmp/$BIN_NAME.sh" "$bindir/$BIN_NAME"
     # shellcheck disable=SC2086
     $use_sudo chmod +rx "$bindir/$BIN_NAME"
 
@@ -62,7 +66,7 @@ main() {
     # shellcheck disable=SC2086
     $use_sudo mkdir -p "$bindir/$SOURCES_NAME"
     # shellcheck disable=SC2086
-    $use_sudo cp -a "$TMP_DIR/sources/." "$bindir/$SOURCES_NAME/"
+    $use_sudo cp -a "$tmp/sources/." "$bindir/$SOURCES_NAME/"
     # shellcheck disable=SC2086
     $use_sudo chmod -R +rx "$bindir/$SOURCES_NAME"
 

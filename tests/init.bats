@@ -11,21 +11,12 @@ teardown() {
     rm -rf "$WORKDIR"
 }
 
-@test "init creates secrets.config.json with ios defaults" {
+@test "init creates a valid secrets.config.json" {
     run bash "$CLI" init
     [ "$status" -eq 0 ]
     [ -f "$WORKDIR/secrets.config.json" ]
-    run jq -r '.platform' "$WORKDIR/secrets.config.json"
-    [ "$output" = "ios" ]
-}
-
-@test "init --platform android sets platform and android path" {
-    run bash "$CLI" init --platform android
+    run jq -e '.vaults | type == "array" and length > 0' "$WORKDIR/secrets.config.json"
     [ "$status" -eq 0 ]
-    run jq -r '.platform' "$WORKDIR/secrets.config.json"
-    [ "$output" = "android" ]
-    run jq -r '.path' "$WORKDIR/secrets.config.json"
-    [ "$output" = "app/src/main/secrets" ]
 }
 
 @test "init refuses to overwrite existing config without --force" {
@@ -39,6 +30,6 @@ teardown() {
     echo '{}' > "$WORKDIR/secrets.config.json"
     run bash "$CLI" init --force
     [ "$status" -eq 0 ]
-    run jq -r '.platform' "$WORKDIR/secrets.config.json"
-    [ "$output" = "ios" ]
+    run jq -e 'has("vaults")' "$WORKDIR/secrets.config.json"
+    [ "$status" -eq 0 ]
 }

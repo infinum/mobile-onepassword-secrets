@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# __write — uploads secret files from the local path to 1Password.
+# __write — uploads configured secret files to their 1Password vaults.
 # shellcheck disable=SC2154
-# SC2154: path, platform, CLI_NAME, bold, reset are runtime-injected globals
-# (loaded by load_config / setup_styles / entry point or tests).
+# SC2154: vaults, file_vaults, vault_aliases, CLI_NAME, green/red/reset are
+# runtime-injected globals (loaded by load_config / setup_styles / entry / tests).
 
 __write_usage() {
-    echo "Usage: $CLI_NAME write [-h] [subdir]"
+    echo "Usage: $CLI_NAME write [-h] [vault]"
     echo
-    echo "Uploads secret files to 1Password. Each file under the configured path is"
-    echo "routed to a vault by matching its path (relative to the configured path)"
-    echo "against the vault patterns; the relative path becomes the document title."
+    echo "Uploads each configured local file to its 1Password vault (the document"
+    echo "title is the file name). Files listed in config but missing locally are"
+    echo "skipped."
     echo
     echo "Arguments:"
-    echo "  subdir   Optional. Restrict the upload to a subdirectory of the path."
+    echo "  vault   Optional. Restrict to one vault (its name or friendly label)."
     echo
     echo "Options:"
-    echo "  -h       Show this help message and exit."
+    echo "  -h      Show this help message and exit."
     return 0
 }
 
@@ -28,102 +28,84 @@ __write() {
     require_tools || exit 1
     setup_styles
     load_config || exit 1
-    platform_validate "$platform" || exit 1
 
-    clear 2>/dev/null || true
-    echo
-    echo "###############################################################"
-    echo "                       SECRET WRITE SCRIPT                     "
-    echo "###############################################################"
-    echo
+    # No sign-in precheck: op prompts for sign-in on its first call (via the
+    # 1Password app integration), or uses OP_SERVICE_ACCOUNT_TOKEN on CI.
 
-    echo "Before you proceed, make sure that you have the latest files locally."
-    read -r -e -p "Have you pulled the files from 1Password? Press enter to continue, or 'q' to quit: " response
-    [[ $response == q ]] && { echo "No problem! Come back again after you've updated the files."; exit; }
-
-    local root="$path"
+    local vault_filter=""
     if [[ -n "$arg" ]]; then
-        root="$path/$arg"
-        if [[ ! -e "$root" ]]; then
-            echo "$root does not exist."
+        if ! vault_filter=$(resolve_vault_filter "$arg"); then
+            echo "Invalid vault argument: $arg"
+            echo "Available: ${vaults[*]+"${vaults[*]}"}"
+            echo
+            __write_usage
             exit 1
         fi
     fi
-    if [[ ! -d "$path" ]]; then
-        echo "Configured path '$path' does not exist."
-        exit 1
-    fi
 
-    # Route each file to a vault by matching its path relative to $path.
-    echo
-    local -a mapped_files=() mapped_vaults=() needed_vaults=()
-    local f relpath v added existing
-    while IFS= read -r f; do
-        relpath="${f#"$path"/}"
-        if v=$(get_vault_for_file "$relpath"); then
-            mapped_files+=("$relpath")
-            mapped_vaults+=("$v")
-            added=false
-            for existing in "${needed_vaults[@]+"${needed_vaults[@]}"}"; do
-                [[ "$existing" == "$v" ]] && { added=true; break; }
-            done
-            [[ "$added" = false ]] && needed_vaults+=("$v")
-        else
-            echo "[!] No vault mapping for $relpath, skipping"
+    # Collect files that exist locally (and match the optional vault filter).
+    local -a up_files=() up_vaults=() needed=()
+    local entry rel vault existing e
+    for entry in "${file_vaults[@]+"${file_vaults[@]}"}"; do
+        rel="${entry%:*}"
+        vault="${entry##*:}"
+        [[ -n "$vault_filter" && "$vault" != "$vault_filter" ]] && continue
+
+        if [[ ! -f "$rel" ]]; then
+            echo "[!] Local file missing, skipping: $rel"
+            continue
         fi
-    done < <(find "$root" -type f | sort)
+        up_files+=("$rel")
+        up_vaults+=("$vault")
+        existing=false
+        for e in "${needed[@]+"${needed[@]}"}"; do
+            [[ "$e" == "$vault" ]] && { existing=true; break; }
+        done
+        [[ "$existing" = false ]] && needed+=("$vault")
+    done
 
-    if [[ "${#mapped_files[@]}" -eq 0 ]]; then
-        echo "No files matched any vault pattern under '$root'."
+    if [[ "${#up_files[@]}" -eq 0 ]]; then
+        echo "No local files to upload."
         exit 1
     fi
 
-    # Check write access only for the vaults actually needed.
-    local vault
-    for vault in "${needed_vaults[@]}"; do
+    # Write-access check for the vaults actually needed.
+    for vault in "${needed[@]}"; do
         detect_vault_access can_write_vault "write" "$vault"
     done
 
     # Preview.
     echo
-    local i has_files=false
-    for i in "${!mapped_files[@]}"; do
-        relpath="${mapped_files[$i]}"
-        v="${mapped_vaults[$i]}"
-        if can_write_vault "$v"; then
-            echo "[+] $relpath → $v"
-            has_files=true
-        else
-            echo "[!] $relpath → $v (no write access, will skip)"
-        fi
+    echo "The following will be uploaded:"
+    local i title
+    for i in "${!up_files[@]}"; do
+        title=$(doc_title_for "${up_files[$i]}")
+        echo "  [+] ${up_files[$i]} → ${up_vaults[$i]} (document '$title')"
     done
 
-    if [[ "$has_files" = false ]]; then
+    # Confirm only when interactive; automation (CI) proceeds.
+    if [[ -t 0 ]]; then
         echo
-        echo "No files to upload (no vault access)."
-        exit 1
+        local response
+        read -r -e -p "Upload these? Press enter to continue, or 'q' to quit: " response
+        [[ $response == q ]] && { echo "Aborted."; exit 0; }
     fi
-
-    echo
-    read -r -e -p "Are those the files you want to upload? Press enter to continue, or 'q' to quit: " response
-    [[ $response == q ]] && { echo "Okay, you can try again with different ones."; exit; }
 
     echo
     echo "Uploading..."
     echo
 
-    for i in "${!mapped_files[@]}"; do
-        relpath="${mapped_files[$i]}"
-        v="${mapped_vaults[$i]}"
-        can_write_vault "$v" || continue
-
-        # The relative path is the document title, so read can restore it exactly.
-        if op item get "$relpath" --vault "$v" > /dev/null 2>&1; then
-            op document edit "$relpath" "$path/$relpath" --vault "$v"
+    local file
+    for i in "${!up_files[@]}"; do
+        file="${up_files[$i]}"
+        vault="${up_vaults[$i]}"
+        title=$(doc_title_for "$file")
+        if op item get "$title" --vault "$vault" > /dev/null 2>&1; then
+            op document edit "$title" "$file" --vault "$vault"
         else
-            op document create "$path/$relpath" --title "$relpath" --vault "$v"
+            op document create "$file" --title "$title" --vault "$vault"
         fi
-        echo "[+] $relpath → $v"
+        echo "[+] $file → $vault (document '$title')"
     done
 
     echo
