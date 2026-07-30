@@ -33,3 +33,29 @@ teardown() {
     run jq -e 'has("vaults")' "$WORKDIR/secrets.config.json"
     [ "$status" -eq 0 ]
 }
+
+# Records the path it is asked to open, so we can assert init opened the config.
+make_opener() {
+    cat > "$WORKDIR/opener.sh" <<EOF
+#!/usr/bin/env bash
+echo "\$1" > "$WORKDIR/opened.txt"
+EOF
+    chmod +x "$WORKDIR/opener.sh"
+}
+
+@test "init opens the created config via INFINUM_SECRETS_OPENER" {
+    make_opener
+    INFINUM_SECRETS_OPENER="$WORKDIR/opener.sh" run bash "$CLI" init
+    [ "$status" -eq 0 ]
+    [ -f "$WORKDIR/opened.txt" ]
+    opened="$(cat "$WORKDIR/opened.txt")"
+    [[ "$opened" == *"/secrets.config.json" ]]
+    [ -f "$opened" ]
+}
+
+@test "init --no-open does not open the config" {
+    make_opener
+    INFINUM_SECRETS_OPENER="$WORKDIR/opener.sh" run bash "$CLI" init --no-open
+    [ "$status" -eq 0 ]
+    [ ! -f "$WORKDIR/opened.txt" ]
+}

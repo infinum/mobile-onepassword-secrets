@@ -169,7 +169,10 @@ in the same config.
 ### `init`
 Writes a generic `secrets.config.json` template (inline heredoc — no external template
 file). Refuses to overwrite an existing config (requires `--force`). Needs neither
-`op` nor `jq` (it only writes a static file).
+`op` nor `jq` (it only writes a static file). After writing, it opens the file in the
+user's editor (best-effort): `$INFINUM_SECRETS_OPENER`, then `$VISUAL` / `$EDITOR`,
+then `open` / `xdg-open`. Opening is skipped when non-interactive or with `--no-open`,
+and never fails the command.
 
 ### `read [vault]`
 For each configured file, fetches the document titled `<filename>` from its vault and
