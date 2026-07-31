@@ -9,7 +9,7 @@
 
 `app-secrets` is a small command-line tool that syncs project secrets
 between local files and [1Password](https://1password.com) vaults, driven by a
-per-project `secrets.config.json`. It wraps the [1Password CLI (`op`)](https://developer.1password.com/docs/cli/)
+per-project `.secrets.config.json`. It wraps the [1Password CLI (`op`)](https://developer.1password.com/docs/cli/)
 so that pulling and pushing secret files is a single command instead of a series
 of manual `op document` invocations.
 
@@ -64,7 +64,7 @@ app-secrets --update
 ## Usage
 
 ```bash
-app-secrets init          # scaffold secrets.config.json and open it in your editor
+app-secrets init          # scaffold .secrets.config.json and open it in your editor
 app-secrets init --no-open # scaffold without opening
 app-secrets doctor        # check tooling, sign-in status, and vault access
 app-secrets read          # download every configured file to its path
@@ -91,7 +91,7 @@ app-secrets --help        # full help
 
 ## Configuration
 
-Each project keeps a `secrets.config.json` (created by `app-secrets init`)
+Each project keeps a `.secrets.config.json` (created by `app-secrets init`)
 in its root. The schema is **vault-centric**: each vault owns the list of local
 files that belong to it.
 
@@ -225,13 +225,13 @@ install.sh                # curl-pipe-to-bash installer
 sources/
 ├── __constants.sh        # VERSION, CLI name, config file name
 ├── __help.sh             # __help
-├── __init.sh             # __init   — scaffold secrets.config.json
+├── __init.sh             # __init   — scaffold .secrets.config.json
 ├── __read.sh             # __read   — download files
 ├── __write.sh            # __write  — upload files
 ├── __doctor.sh           # __doctor — diagnostics
 ├── __auto_update.sh      # __script_auto_update — powers --update
 └── helpers/
-    ├── __config.sh       # load + parse secrets.config.json (via jq) into bash vars
+    ├── __config.sh       # load + parse .secrets.config.json (via jq) into bash vars
     └── __op_utils.sh     # op/jq checks, sign-in/service-account, vault access
 tests/                    # bats-core suite + fake `op` shim
 ```
@@ -285,7 +285,7 @@ Planned and proposed improvements — contributions welcome.
 - [ ] **Homebrew formula** declaring `op` + `jq` as dependencies (replaces the curl
   installer and the runtime presence checks).
 - [ ] **Migration helper** for projects moving off the old Vault workflow — read the
-  existing vault config and generate a `secrets.config.json`. Likely an agent
+  existing vault config and generate a `.secrets.config.json`. Likely an agent
   prompt/skill rather than a bundled script.
 
 ## Credits
