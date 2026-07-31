@@ -11,26 +11,26 @@ teardown() {
     rm -rf "$WORKDIR"
 }
 
-@test "init creates a valid secrets.config.json" {
+@test "init creates a valid .secrets.config.json" {
     run bash "$CLI" init
     [ "$status" -eq 0 ]
-    [ -f "$WORKDIR/secrets.config.json" ]
-    run jq -e '.vaults | type == "array" and length > 0' "$WORKDIR/secrets.config.json"
+    [ -f "$WORKDIR/.secrets.config.json" ]
+    run jq -e '.vaults | type == "array" and length > 0' "$WORKDIR/.secrets.config.json"
     [ "$status" -eq 0 ]
 }
 
 @test "init refuses to overwrite existing config without --force" {
-    echo '{}' > "$WORKDIR/secrets.config.json"
+    echo '{}' > "$WORKDIR/.secrets.config.json"
     run bash "$CLI" init
     [ "$status" -ne 0 ]
     [[ "$output" == *"already exists"* ]]
 }
 
 @test "init --force overwrites existing config" {
-    echo '{}' > "$WORKDIR/secrets.config.json"
+    echo '{}' > "$WORKDIR/.secrets.config.json"
     run bash "$CLI" init --force
     [ "$status" -eq 0 ]
-    run jq -e 'has("vaults")' "$WORKDIR/secrets.config.json"
+    run jq -e 'has("vaults")' "$WORKDIR/.secrets.config.json"
     [ "$status" -eq 0 ]
 }
 
@@ -49,7 +49,7 @@ EOF
     [ "$status" -eq 0 ]
     [ -f "$WORKDIR/opened.txt" ]
     opened="$(cat "$WORKDIR/opened.txt")"
-    [[ "$opened" == *"/secrets.config.json" ]]
+    [[ "$opened" == *"/.secrets.config.json" ]]
     [ -f "$opened" ]
 }
 

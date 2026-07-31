@@ -2,7 +2,7 @@
 # shellcheck disable=SC2154
 # SC2154: CLI_NAME, CONFIG_FILE_NAME are runtime globals injected by the entry
 #         point before this file is sourced.
-# __init — scaffold secrets.config.json in the current directory.
+# __init — scaffold .secrets.config.json in the current directory.
 
 # Best-effort open of the freshly created config. Never fails init.
 # Opener resolution:

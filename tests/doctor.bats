@@ -25,11 +25,11 @@ teardown() {
 
 @test "doctor reports missing config" {
     run bash "$CLI" doctor
-    [[ "$output" == *"secrets.config.json not found"* ]]
+    [[ "$output" == *".secrets.config.json not found"* ]]
 }
 
 @test "doctor reports invalid config JSON" {
-    echo "{ broken" > "$WORKDIR/secrets.config.json"
+    echo "{ broken" > "$WORKDIR/.secrets.config.json"
     run bash "$CLI" doctor
     [[ "$output" == *"valid JSON"* || "$output" == *"invalid"* ]]
 }

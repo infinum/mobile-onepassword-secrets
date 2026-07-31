@@ -4,4 +4,4 @@
 
 VERSION="1.0.0"
 CLI_NAME="infinum-secrets"
-CONFIG_FILE_NAME="secrets.config.json"
+CONFIG_FILE_NAME=".secrets.config.json"

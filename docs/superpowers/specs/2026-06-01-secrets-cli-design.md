@@ -111,7 +111,7 @@ matching app-deploy):
 
 ## Configuration
 
-JSON file `secrets.config.json` in the project root, created by `infinum-secrets init`,
+JSON file `.secrets.config.json` in the project root, created by `infinum-secrets init`,
 parsed with `jq`.
 
 ```json
@@ -146,7 +146,7 @@ configured file path. This matches the Android consumer's existing vaults exactl
 
 ### Parsing (`helpers/__config.sh`)
 
-`__config.sh` locates `secrets.config.json` (cwd), validates it is valid JSON with
+`__config.sh` locates `.secrets.config.json` (cwd), validates it is valid JSON with
 the required `vaults` key and that each vault has a non-empty `vault` + `files`,
 then flattens it into bash variables:
 
@@ -167,7 +167,7 @@ in the same config.
 ## Commands
 
 ### `init`
-Writes a generic `secrets.config.json` template (inline heredoc — no external template
+Writes a generic `.secrets.config.json` template (inline heredoc — no external template
 file). Refuses to overwrite an existing config (requires `--force`). Needs neither
 `op` nor `jq` (it only writes a static file). After writing, it opens the file in the
 user's editor (best-effort): `$INFINUM_SECRETS_OPENER`, then `$VISUAL` / `$EDITOR`,
@@ -193,7 +193,7 @@ Diagnostics:
 - Signed in? — probed with a **bounded** `op whoami` (`op_signed_in`) that hard-kills
   `op` after ~8s so a locked/unresponsive 1Password app can't hang doctor. `op whoami`
   works for both personal sign-ins and service-account tokens; doctor reports which.
-- `secrets.config.json` present, valid JSON, required keys present?
+- `.secrets.config.json` present, valid JSON, required keys present?
 - Per-vault read + write access table (reuses `print_vault_access`). Under a service
   account, write access is assumed (no user identity to introspect; `op` enforces on
   write).
@@ -245,7 +245,7 @@ needed.
 
 | Today | Becomes |
 |-------|---------|
-| `ios/.onepassword/config.sh` | `secrets.config.json` + `helpers/__config.sh` parser |
+| `ios/.onepassword/config.sh` | `.secrets.config.json` + `helpers/__config.sh` parser |
 | `ios/.onepassword/utils.sh` | `sources/helpers/__op_utils.sh` |
 | `ios/.onepassword/read.sh` | `sources/__read.sh` (`__read` function) |
 | `ios/.onepassword/write.sh` | `sources/__write.sh` (`__write` function) |

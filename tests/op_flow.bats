@@ -48,7 +48,7 @@ exit 0
 SHIM
     chmod +x "$SHIMBIN/op"
 
-    cat > "$WORKDIR/secrets.config.json" <<'JSON'
+    cat > "$WORKDIR/.secrets.config.json" <<'JSON'
 {
   "vaults": [
     { "name": "staging", "vault": "v-staging",

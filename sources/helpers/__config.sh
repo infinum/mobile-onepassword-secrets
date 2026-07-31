@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # sources/helpers/__config.sh
 # shellcheck disable=SC2034
-# Finds and parses secrets.config.json into bash vars/arrays.
+# Finds and parses .secrets.config.json into bash vars/arrays.
 # Produces: vaults (1Password vault names); file_vaults ("relpath:vault");
 #           vault_aliases ("label:vault" and "vault:vault" for filtering).
 
