@@ -76,6 +76,12 @@ __write() {
         detect_vault_access can_write_vault "write" "$vault"
     done
 
+    # Warm the per-vault item cache in this shell: resolution below runs in
+    # command substitutions (subshells), which inherit but can't fill it.
+    for vault in "${needed[@]}"; do
+        get_vault_items "$vault" > /dev/null
+    done
+
     # Preview.
     echo
     echo "The following will be uploaded:"
@@ -97,17 +103,50 @@ __write() {
     echo "Uploading..."
     echo
 
-    local file
+    # Resolve each file to its item (title + 'path' field), then edit by id or
+    # create-and-stamp. claimed ids stop two same-named entries from adopting
+    # the same unstamped item.
+    local file verdict action id out new_id claimed=""
     for i in "${!up_files[@]}"; do
         file="${up_files[$i]}"
         vault="${up_vaults[$i]}"
         title=$(doc_title_for "$file")
-        if op item get "$title" --vault "$vault" > /dev/null 2>&1; then
-            op document edit "$title" "$file" --vault "$vault"
-        else
-            op document create "$file" --title "$title" --vault "$vault"
-        fi
-        echo "[+] $file → $vault (document '$title')"
+        verdict=$(resolve_item_for_path "$vault" "$file" "$claimed")
+        action="${verdict%% *}"
+        id="${verdict#* }"
+
+        case "$action" in
+            found|adopt)
+                if ! op document edit "$id" "$file" --vault "$vault"; then
+                    echo "[!] Could not upload $file to '$vault'"
+                    continue
+                fi
+                if [[ "$action" == "adopt" ]]; then
+                    stamp_item_path "$id" "$file" "$vault" \
+                        || echo "[!] Uploaded, but could not set 'path' on document '$title' in '$vault'"
+                fi
+                claimed="${claimed:+$claimed,}$id"
+                echo "[+] $file → $vault (document '$title')"
+                ;;
+            none)
+                if ! out=$(op document create "$file" --title "$title" --vault "$vault" --format json); then
+                    echo "[!] Could not upload $file to '$vault'"
+                    continue
+                fi
+                new_id=$(printf '%s' "$out" | jq -r '.id // .uuid // empty' 2>/dev/null) || new_id=""
+                if [[ -n "$new_id" ]]; then
+                    stamp_item_path "$new_id" "$file" "$vault" \
+                        || echo "[!] Uploaded, but could not set 'path' on document '$title' in '$vault'"
+                    claimed="${claimed:+$claimed,}$new_id"
+                else
+                    echo "[!] Uploaded, but could not read the new item id to set 'path' (the next write adopts and stamps it)"
+                fi
+                echo "[+] $file → $vault (document '$title')"
+                ;;
+            ambiguous)
+                echo "[!] Multiple documents titled '$title' in '$vault' and none matches path '$file' — skipping. Set the 'path' text field on the right item or remove duplicates."
+                ;;
+        esac
     done
 
     echo
