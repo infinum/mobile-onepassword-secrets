@@ -1,54 +1,18 @@
 # tests/op_flow.bats
-# Exercises read/write end-to-end against a fake `op` on PATH. The shim records
-# every invocation to $OP_LOG and returns canned output, so we verify routing,
-# document titles (full filename, no folder) and file placement without a real
-# 1Password account. `jq` is the real one.
+# Exercises read/write end-to-end against the stateful fake `op` on PATH
+# (tests/helpers/fake_op.sh). The shim records every invocation to $OP_LOG and
+# keeps item state under $OP_STATE, so we verify routing, document titles
+# (full filename, no folder) and file placement without a real 1Password
+# account. `jq` is the real one.
+
+load helpers/common
 
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
     CLI="$REPO_ROOT/app-secrets.sh"
 
     WORKDIR="$(mktemp -d)"
-    SHIMBIN="$WORKDIR/bin"
-    mkdir -p "$SHIMBIN"
-    OP_LOG="$WORKDIR/op.log"
-    : > "$OP_LOG"
-
-    cat > "$SHIMBIN/op" <<'SHIM'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >> "$OP_LOG"
-
-flag_val() {
-    local want="$1"; shift
-    local prev=""
-    for a in "$@"; do
-        [ "$prev" = "$want" ] && { printf '%s' "$a"; return 0; }
-        prev="$a"
-    done
-}
-
-if [ "$1" = whoami ]; then
-    [ "${OP_FAKE_FAIL_WHOAMI:-}" = 1 ] && exit 1
-    echo '{"user_uuid":"u1"}'
-elif [ "$1" = vault ] && [ "$2" = list ]; then
-    [ "${OP_FAKE_FAIL_VAULT_LIST:-}" = 1 ] && exit 1
-    echo '[{"name":"v-staging"},{"name":"v-prod"}]'
-elif [ "$1" = vault ] && [ "$2" = user ] && [ "$3" = list ]; then
-    echo '[{"id":"user-1","permissions":["allow_viewing","allow_editing"]}]'
-elif [ "$1" = user ] && [ "$2" = get ]; then
-    echo '{"id":"user-1"}'
-elif [ "$1" = item ] && [ "$2" = get ]; then
-    exit 1   # item does not exist -> write should `document create`
-elif [ "$1" = document ] && [ "$2" = get ]; then
-    out=$(flag_val --out-file "$@")
-    if [ -n "$out" ]; then
-        mkdir -p "$(dirname "$out")"
-        echo "secret-contents" > "$out"
-    fi
-fi
-exit 0
-SHIM
-    chmod +x "$SHIMBIN/op"
+    setup_fake_op "$WORKDIR"
 
     cat > "$WORKDIR/.secrets.config.json" <<'JSON'
 {
@@ -62,8 +26,6 @@ SHIM
 JSON
 
     export APP_SECRETS_SOURCES="$REPO_ROOT/sources"
-    export OP_LOG
-    export PATH="$SHIMBIN:$PATH"
     export TERM="${TERM:-xterm}"
     cd "$WORKDIR"
 }
@@ -73,7 +35,15 @@ teardown() {
     rm -rf "$WORKDIR"
 }
 
+seed_configured_docs() {
+    seed_op_item v-staging Keys.staging.swift secret-contents > /dev/null
+    seed_op_item v-staging Config.dev.json secret-contents > /dev/null
+    seed_op_item v-prod Keys.production.swift secret-contents > /dev/null
+}
+
 @test "read fetches each file by full-filename title into its path" {
+    seed_configured_docs
+
     run bash "$CLI" read
     [ "$status" -eq 0 ]
 
@@ -87,6 +57,8 @@ teardown() {
 }
 
 @test "read <label> restricts to that vault" {
+    seed_configured_docs
+
     run bash "$CLI" read prod
     [ "$status" -eq 0 ]
 
