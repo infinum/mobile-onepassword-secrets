@@ -76,12 +76,14 @@ app-secrets --help        # full help
   when non-interactive, e.g. CI).
 - `read` fetches each configured file's document (matched by title and the
   `path` field, then fetched by item id) from its vault into that file's path,
-  creating folders as needed. Vaults you can't access are skipped rather than
+  creating folders as needed. Pattern entries download every document whose
+  stored path matches. Vaults you can't access are skipped rather than
   failing the whole run.
 - `write` uploads each configured file that exists locally (create if the
-  document is absent, edit if present). Missing local files are skipped. It
-  previews the upload and asks for confirmation when run interactively;
-  automation (CI) proceeds without prompting.
+  document is absent, edit if present). Pattern entries expand against the
+  local tree first. Missing local files are skipped. It previews the upload
+  and asks for confirmation when run interactively; automation (CI) proceeds
+  without prompting.
 - Both accept an optional vault argument (vault name or friendly label) to scope
   the operation to a single vault.
 
@@ -183,13 +185,40 @@ even if they live in different directories:
 }
 ```
 
-> **Globbing / wildcards are not supported (for now).** Every file must be listed
-> explicitly with its full relative path — a pattern such as
-> `Vault/**/*.staging.*` will **not** expand. The reason is on `read`: a glob is
-> a set of matches with no single destination, and since the document title is
-> the file name (not the full path), the tool can't reconstruct where each
-> matched document should be written. When you add a new secret file, add its
-> path to the relevant vault's `files` array.
+### Glob / folder patterns
+
+Besides literal paths, `files` entries can be patterns:
+
+| Pattern | Meaning |
+|---------|---------|
+| `*` | Any characters within one path component (never crosses `/`). |
+| `?` | One character within a component. |
+| `**` | Any characters across directories; `**/` matches zero or more whole directories. |
+| `dir/` | Trailing slash is folder shorthand for `dir/**` — everything under `dir`, recursively. |
+
+```json
+{
+  "vaults": [
+    {
+      "name": "staging",
+      "vault": "project-myapp-ios-staging",
+      "files": [
+        "MyApp/SupportingFiles/Vault/**/*.staging.*",
+        "Certs/"
+      ]
+    }
+  ]
+}
+```
+
+On `write`, patterns expand against the local tree and every match is uploaded
+(and stamped with its path). On `read`, patterns match the `path` fields stored
+on the vault's documents, and every hit is downloaded to its stamped path —
+documents without the field are invisible to patterns, so run `write` once
+before relying on pattern `read`. When a literal entry and a pattern overlap,
+the file syncs once. Regex metacharacters in patterns are treated literally,
+and stored paths that would escape the repo (absolute, `..`) are refused on
+`read`.
 
 ## Authentication
 
@@ -236,8 +265,9 @@ sources/
 ├── __auto_update.sh      # __script_auto_update — powers --update
 └── helpers/
     ├── __config.sh       # load + parse .secrets.config.json (via jq) into bash vars
-    └── __op_utils.sh     # op/jq checks, sign-in/service-account, vault access,
-                          # path-field item resolution
+    ├── __op_utils.sh     # op/jq checks, sign-in/service-account, vault access,
+    │                     # path-field item resolution
+    └── __path_utils.sh   # glob/folder pattern translation + path safety gate
 tests/                    # bats-core suite
 └── helpers/              # stateful fake `op` shim + shared bats setup
 ```
@@ -282,9 +312,11 @@ Planned and proposed improvements — contributions welcome.
   `Production/GoogleService-Info.plist` — used to collide when they belong to the
   same vault. Each file's repo-relative path is now stored on the 1Password item
   as a custom `path` field and matched instead of the title alone.
-- [ ] **Glob / folder patterns in `files`.** Once the path is stored on the item,
-  `read` can reconstruct each file's destination — which removes today's blocker — so
-  `files` could accept globs (e.g. `Vault/**/*.staging.*`), expanded on `write`.
+- [x] **Glob / folder patterns in `files`.** With the path stored on the item,
+  `read` can reconstruct each file's destination, so `files` accepts globs
+  (e.g. `Vault/**/*.staging.*`) and folder shorthand (`Certs/`) — expanded
+  against the local tree on `write` and matched against stored `path` fields
+  on `read`.
 
 **Nice to have**
 

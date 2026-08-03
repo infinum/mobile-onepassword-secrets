@@ -86,6 +86,74 @@ JSON
     grep -q "document create Keys/Keys.staging.swift" "$OP_LOG"
 }
 
+@test "read downloads documents whose stored path matches a pattern" {
+    seed_op_item v-staging Keys.staging.swift keys Keys/Keys.staging.swift > /dev/null
+    ida=$(seed_op_item v-staging a.plist doc-a Vault/a.plist)
+    idb=$(seed_op_item v-staging b.plist doc-b Vault/sub/b.plist)
+    idother=$(seed_op_item v-staging x.plist doc-x Other/x.plist)
+    idunstamped=$(seed_op_item v-staging c.plist doc-c)
+    seed_op_item v-staging cert.pem doc-cert Certs/deep/cert.pem > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+
+    [ "$(cat Keys/Keys.staging.swift)" = "keys" ]
+    [ "$(cat Vault/a.plist)" = "doc-a" ]
+    [ "$(cat Vault/sub/b.plist)" = "doc-b" ]
+    [ "$(cat Certs/deep/cert.pem)" = "doc-cert" ]
+    [ ! -f Other/x.plist ]
+    grep -q "document get $ida --vault v-staging --out-file Vault/a.plist --force" "$OP_LOG"
+    grep -q "document get $idb --vault v-staging --out-file Vault/sub/b.plist --force" "$OP_LOG"
+    ! grep -q "document get $idother" "$OP_LOG"
+    ! grep -q "document get $idunstamped" "$OP_LOG"
+}
+
+@test "read refuses unsafe stored paths" {
+    cat > secrets.config.json <<'JSON'
+{
+  "vaults": [
+    { "vault": "v-staging", "files": ["**"] }
+  ]
+}
+JSON
+    idevil=$(seed_op_item v-staging evil.txt evil ../evil.txt)
+    idabs=$(seed_op_item v-staging abs.txt abs /etc/evil-abs.txt)
+    seed_op_item v-staging ok.txt ok Sub/ok.txt > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Refusing unsafe path"* ]]
+    [ ! -f ../evil.txt ]
+    [ ! -f /etc/evil-abs.txt ]
+    [ "$(cat Sub/ok.txt)" = "ok" ]
+    ! grep -q "document get $idevil" "$OP_LOG"
+    ! grep -q "document get $idabs" "$OP_LOG"
+}
+
+@test "read fetches a document once when explicit and glob entries overlap" {
+    cat > secrets.config.json <<'JSON'
+{
+  "vaults": [
+    { "vault": "v-staging", "files": ["Keys/Keys.staging.swift", "Keys/**"] }
+  ]
+}
+JSON
+    seed_op_item v-staging Keys.staging.swift keys Keys/Keys.staging.swift > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "document get" "$OP_LOG")" -eq 1 ]
+}
+
+@test "read reports patterns matching no documents" {
+    seed_op_item v-staging Keys.staging.swift keys Keys/Keys.staging.swift > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Pattern matched no documents in 'v-staging': Vault/**/*.plist"* ]]
+    [[ "$output" == *"Pattern matched no documents in 'v-staging': Certs/"* ]]
+}
+
 @test "write <label> skips patterns for other vaults" {
     cat > secrets.config.json <<'JSON'
 {
