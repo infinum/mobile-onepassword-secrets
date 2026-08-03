@@ -66,6 +66,38 @@ __write() {
         [[ "$existing" = false ]] && needed+=("$vault")
     done
 
+    # Expand glob/folder patterns against the local tree; matches join the
+    # upload list unless an explicit entry already claimed them.
+    local pat matches m dup j
+    for entry in "${pattern_vaults[@]+"${pattern_vaults[@]}"}"; do
+        pat="${entry%:*}"
+        vault="${entry##*:}"
+        [[ -n "$vault_filter" && "$vault" != "$vault_filter" ]] && continue
+
+        matches=$(expand_glob_local "$pat")
+        if [[ -z "$matches" ]]; then
+            echo "[!] Pattern matched no local files: $pat"
+            continue
+        fi
+        while IFS= read -r m; do
+            dup=false
+            for j in ${up_files[@]+"${!up_files[@]}"}; do
+                if [[ "${up_files[$j]}" == "$m" && "${up_vaults[$j]}" == "$vault" ]]; then
+                    dup=true
+                    break
+                fi
+            done
+            [[ "$dup" == true ]] && continue
+            up_files+=("$m")
+            up_vaults+=("$vault")
+            existing=false
+            for e in "${needed[@]+"${needed[@]}"}"; do
+                [[ "$e" == "$vault" ]] && { existing=true; break; }
+            done
+            [[ "$existing" = false ]] && needed+=("$vault")
+        done <<< "$matches"
+    done
+
     if [[ "${#up_files[@]}" -eq 0 ]]; then
         echo "No local files to upload."
         exit 1
