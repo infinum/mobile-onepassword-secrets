@@ -217,8 +217,10 @@ on the vault's documents, and every hit is downloaded to its stamped path —
 documents without the field are invisible to patterns, so run `write` once
 before relying on pattern `read`. When a literal entry and a pattern overlap,
 the file syncs once. Regex metacharacters in patterns are treated literally,
-and stored paths that would escape the repo (absolute, `..`) are refused on
-`read`.
+and stored paths that would escape the repo (absolute, `..`, leading `-`) are
+refused on `read`. Note that `**` crosses directories wherever it appears —
+`a**b` matches `a/x/b` — unlike gitignore, where a non-boundary `**` degrades
+to `*`.
 
 ## Authentication
 
@@ -299,6 +301,9 @@ shellcheck app-secrets.sh install.sh sources/*.sh sources/helpers/*.sh
 > **bash 3.2.** macOS ships bash 3.2, so avoid `mapfile`/`readarray`, `${var,,}`,
 > and unguarded empty-array expansions. Guard arrays with `"${arr[@]+"${arr[@]}"}"`
 > and initialize them as `local -a x=()`.
+>
+> **Path handling.** Everything is line-based: file names containing newlines,
+> tabs, or backslashes are out of scope. Spaces are fine.
 
 ## Roadmap
 

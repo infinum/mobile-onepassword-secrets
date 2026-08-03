@@ -118,6 +118,7 @@ JSON
 JSON
     idevil=$(seed_op_item v-staging evil.txt evil ../evil.txt)
     idabs=$(seed_op_item v-staging abs.txt abs /etc/evil-abs.txt)
+    iddash=$(seed_op_item v-staging dash.txt dash '-p/evil.txt')
     seed_op_item v-staging ok.txt ok Sub/ok.txt > /dev/null
 
     run bash "$CLI" read
@@ -125,9 +126,11 @@ JSON
     [[ "$output" == *"Refusing unsafe path"* ]]
     [ ! -f ../evil.txt ]
     [ ! -f /etc/evil-abs.txt ]
+    [ ! -e ./-p ]
     [ "$(cat Sub/ok.txt)" = "ok" ]
     ! grep -q "document get $idevil" "$OP_LOG"
     ! grep -q "document get $idabs" "$OP_LOG"
+    ! grep -q "document get $iddash" "$OP_LOG"
 }
 
 @test "read fetches a document once when explicit and glob entries overlap" {
@@ -145,6 +148,13 @@ JSON
     [ "$(grep -c "document get" "$OP_LOG")" -eq 1 ]
 }
 
+@test "read skips patterns for a vault it cannot list" {
+    OP_FAKE_FAIL_ITEM_LIST=1 run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Could not list documents in 'v-staging'"* ]]
+    [[ "$output" != *"Pattern matched no documents"* ]]
+}
+
 @test "read reports patterns matching no documents" {
     seed_op_item v-staging Keys.staging.swift keys Keys/Keys.staging.swift > /dev/null
 
@@ -152,6 +162,25 @@ JSON
     [ "$status" -eq 0 ]
     [[ "$output" == *"Pattern matched no documents in 'v-staging': Vault/**/*.plist"* ]]
     [[ "$output" == *"Pattern matched no documents in 'v-staging': Certs/"* ]]
+}
+
+@test "read <label> skips patterns for other vaults" {
+    cat > secrets.config.json <<'JSON'
+{
+  "vaults": [
+    { "name": "staging", "vault": "v-staging", "files": ["Keys/Keys.staging.swift"] },
+    { "name": "prod", "vault": "v-prod", "files": ["Prod/"] }
+  ]
+}
+JSON
+    seed_op_item v-staging Keys.staging.swift keys Keys/Keys.staging.swift > /dev/null
+    idprod=$(seed_op_item v-prod p.pem prod Prod/p.pem)
+
+    run bash "$CLI" read staging
+    [ "$status" -eq 0 ]
+    [ ! -f Prod/p.pem ]
+    ! grep -q "document get $idprod" "$OP_LOG"
+    ! grep -q "item list --vault v-prod" "$OP_LOG"
 }
 
 @test "write <label> skips patterns for other vaults" {

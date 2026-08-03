@@ -129,6 +129,15 @@ setup() {
     [[ "$output" == *"repo-relative"* ]]
 }
 
+@test "load_config rejects paths starting with a dash" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v","files":["-p/evil.txt"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"repo-relative"* ]]
+}
+
 @test "load_config accepts dotted names that are not traversals" {
     tmp="$(mktemp)"
     echo '{"vaults":[{"vault":"v","files":["a..b/c.txt", ".env.staging"]}]}' > "$tmp"

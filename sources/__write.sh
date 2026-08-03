@@ -8,7 +8,9 @@ __write_usage() {
     echo "Usage: $CLI_NAME write [-h] [vault]"
     echo
     echo "Uploads each configured local file to its 1Password vault (the document"
-    echo "title is the file name). Files listed in config but missing locally are"
+    echo "title is the file name; the repo-relative path is stamped on the item"
+    echo "as a 'path' field). Pattern entries (globs, folder shorthand) expand"
+    echo "against the local tree. Files listed in config but missing locally are"
     echo "skipped."
     echo
     echo "Arguments:"
@@ -46,8 +48,10 @@ __write() {
     fi
 
     # Collect files that exist locally (and match the optional vault filter).
+    # Dedupe repeats of the same file:vault pair — a duplicated entry would
+    # otherwise create a second item stamped with the same path.
     local -a up_files=() up_vaults=() needed=()
-    local entry rel vault existing e
+    local entry rel vault existing e dup j
     for entry in "${file_vaults[@]+"${file_vaults[@]}"}"; do
         rel="${entry%:*}"
         vault="${entry##*:}"
@@ -57,6 +61,14 @@ __write() {
             echo "[!] Local file missing, skipping: $rel"
             continue
         fi
+        dup=false
+        for j in ${up_files[@]+"${!up_files[@]}"}; do
+            if [[ "${up_files[$j]}" == "$rel" && "${up_vaults[$j]}" == "$vault" ]]; then
+                dup=true
+                break
+            fi
+        done
+        [[ "$dup" == true ]] && continue
         up_files+=("$rel")
         up_vaults+=("$vault")
         existing=false
@@ -80,6 +92,10 @@ __write() {
             continue
         fi
         while IFS= read -r m; do
+            if ! is_safe_rel_path "$m"; then
+                echo "[!] Skipping unsafe local match for pattern $pat: $m"
+                continue
+            fi
             dup=false
             for j in ${up_files[@]+"${!up_files[@]}"}; do
                 if [[ "${up_files[$j]}" == "$m" && "${up_vaults[$j]}" == "$vault" ]]; then
@@ -176,7 +192,10 @@ __write() {
                 echo "[+] $file → $vault (document '$title')"
                 ;;
             ambiguous)
-                echo "[!] Multiple documents titled '$title' in '$vault' and none matches path '$file' — skipping. Set the 'path' text field on the right item or remove duplicates."
+                echo "[!] Cannot uniquely resolve document '$title' in '$vault' for path '$file' — skipping. Remove duplicate items in 1Password, or make sure exactly one carries a 'path' field with this value."
+                ;;
+            error)
+                echo "[!] Could not list documents in '$vault', skipping $file"
                 ;;
         esac
     done

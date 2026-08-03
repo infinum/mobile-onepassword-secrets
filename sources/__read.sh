@@ -8,7 +8,9 @@ __read_usage() {
     echo "Usage: $CLI_NAME read [-h] [vault]"
     echo
     echo "Downloads each configured file from its 1Password vault to the file's"
-    echo "path (the document title is the file name). Creates folders as needed."
+    echo "path (documents are matched by file name plus their 'path' field)."
+    echo "Pattern entries (globs, folder shorthand) download every document"
+    echo "whose stored path matches. Creates folders as needed."
     echo
     echo "Arguments:"
     echo "  vault   Optional. Restrict to one vault (its name or friendly label)."
@@ -77,7 +79,7 @@ __read() {
 
         case "$action" in
             found|adopt)
-                mkdir -p "$(dirname "$rel")"
+                mkdir -p -- "$(dirname -- "$rel")"
                 if op document get "$id" --vault "$vault" --out-file "$rel" --force; then
                     claimed="${claimed:+$claimed,}$id"
                     echo "[+] $rel (from $vault, document '$title')"
@@ -89,7 +91,10 @@ __read() {
                 echo "[!] No document in '$vault' for $rel (title '$title')"
                 ;;
             ambiguous)
-                echo "[!] Multiple documents titled '$title' in '$vault' and none matches path '$rel' — skipping. Run '$CLI_NAME write' to stamp items, or set the 'path' field manually."
+                echo "[!] Cannot uniquely resolve document '$title' in '$vault' for path '$rel' — skipping. Run '$CLI_NAME write' to stamp items, or clean up duplicates in 1Password."
+                ;;
+            error)
+                echo "[!] Could not list documents in '$vault', skipping $rel"
                 ;;
         esac
     done
@@ -112,7 +117,10 @@ __read() {
         fi
 
         regex=$(glob_to_regex "$(normalize_pattern "$pat")")
-        get_vault_items "$vault" > /dev/null   # warm the cache in this shell
+        if [[ "$(get_vault_items "$vault")" == "FAILED" ]]; then   # also warms the cache
+            echo "[!] Could not list documents in '$vault', skipping pattern $pat"
+            continue
+        fi
         matched=0
         while IFS=$'\t' read -r id rpath; do
             [[ -z "$id" ]] && continue
@@ -123,7 +131,7 @@ __read() {
                 echo "[!] Refusing unsafe path from document in '$vault': $rpath"
                 continue
             fi
-            mkdir -p "$(dirname "$rpath")"
+            mkdir -p -- "$(dirname -- "$rpath")"
             if op document get "$id" --vault "$vault" --out-file "$rpath" --force; then
                 claimed="${claimed:+$claimed,}$id"
                 echo "[+] $rpath (from $vault, pattern '$pat')"

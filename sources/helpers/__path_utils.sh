@@ -78,12 +78,13 @@ expand_glob_local() {
 
 # Safety gate for paths that arrive from a remote 'path' field: they become
 # filesystem write destinations on read, so anything that could escape the
-# repo (absolute, '~', '.' or '..' components) is rejected.
+# repo (absolute, '~', '.' or '..' components) or read as a flag by tools
+# like dirname/mkdir (leading '-') is rejected.
 is_safe_rel_path() {
     local p="$1"
     [[ -n "$p" ]] || return 1
     case "$p" in
-        /*|"~"*) return 1 ;;
+        /*|"~"*|-*) return 1 ;;
     esac
     case "/$p/" in
         */../*|*/./*) return 1 ;;

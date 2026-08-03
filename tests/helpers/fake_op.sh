@@ -8,7 +8,8 @@
 #   $OP_STATE/items/<id>/path      value of the custom 'path' field (optional)
 #   $OP_STATE/items/<id>/content   document bytes
 # Env toggles: OP_FAKE_BROKEN_CREATE=1 makes `document create --format json`
-# print `{}` (no id) to exercise the caller's unparseable-id fallback.
+# print `{}` (no id) to exercise the caller's unparseable-id fallback;
+# OP_FAKE_FAIL_ITEM_LIST=1 makes `item list` fail (transient op outage).
 
 printf '%s\n' "$*" >> "$OP_LOG"
 
@@ -88,6 +89,7 @@ if [ "$cmd" = user ] && [ "$sub" = get ]; then
 fi
 
 if [ "$cmd" = item ] && [ "$sub" = list ]; then
+    [ "${OP_FAKE_FAIL_ITEM_LIST:-}" = 1 ] && exit 1
     vault=$(flag_val --vault "$@") || vault=""
     out="[]"
     for d in "$STATE/items"/*/; do

@@ -211,8 +211,10 @@ can_write_vault() {
 _vault_items_names=()
 _vault_items_json=()
 
-# Echoes a JSON array of full items (id, title, fields) for a vault; cached.
-# Always returns 0; op failures and empty vaults yield [].
+# Echoes a JSON array of full Document items (id, title, fields) for a vault;
+# cached. Always returns 0. An op failure yields the FAILED sentinel — callers
+# must skip the vault rather than treat it as empty, or a transient outage
+# would make write create duplicates of every already-stored file.
 get_vault_items() {
     local vault="$1" i list
     for i in ${_vault_items_names[@]+"${!_vault_items_names[@]}"}; do
@@ -221,16 +223,15 @@ get_vault_items() {
             return 0
         fi
     done
-    if ! list=$(op item list --vault "$vault" --format json 2>/dev/null); then
-        list="[]"
-    fi
-    if [[ -z "$list" ]] || printf '%s' "$list" | jq -e 'length == 0' >/dev/null 2>&1; then
+    if ! list=$(op item list --vault "$vault" --categories Document --format json 2>/dev/null); then
+        list="FAILED"
+    elif [[ -z "$list" ]] || printf '%s' "$list" | jq -e 'length == 0' >/dev/null 2>&1; then
         list="[]"
     else
         # One batched fetch for the whole vault: pipe the summaries into
         # `op item get -`, which emits a stream of full items; slurp to an array.
         if ! list=$(printf '%s' "$list" | op item get - --format json 2>/dev/null | jq -s '.'); then
-            list="[]"
+            list="FAILED"
         fi
     fi
     _vault_items_names+=("$vault")
@@ -245,6 +246,7 @@ get_vault_items() {
 #   "adopt <id>"  no path match, but a single candidate with no 'path' field
 #   "none"        nothing to reuse (write should create; read reports missing)
 #   "ambiguous"   duplicate stamps, or several candidates incl. unstamped ones
+#   "error"       the vault's items could not be listed — skip the vault
 # The optional claimed-ids csv excludes items already matched this run, so two
 # entries sharing a base name can't adopt the same unstamped item.
 # Usage: resolve_item_for_path <vault> <relpath> [claimed_ids_csv]
@@ -252,9 +254,13 @@ resolve_item_for_path() {
     local vault="$1" rel="$2" claimed="${3:-}" title items
     title=$(doc_title_for "$rel")
     items=$(get_vault_items "$vault")
+    if [[ "$items" == "FAILED" ]]; then
+        echo "error"
+        return 0
+    fi
     printf '%s' "$items" | jq -r --arg t "$title" --arg p "$rel" --arg cl "$claimed" '
         ($cl | split(",")) as $claimed
-        | [ .[] | select(.title == $t) | select([.id] | inside($claimed) | not) ] as $cand
+        | [ .[] | select(.title == $t) | select(.id as $i | ($claimed | index($i)) | not) ] as $cand
         | [ $cand[] | select((.fields // []) | any(.label == "path" and .value == $p)) ] as $exact
         | [ $cand[] | select((.fields // []) | any(.label == "path") | not) ] as $unstamped
         | if   ($exact | length) == 1 then "found \($exact[0].id)"

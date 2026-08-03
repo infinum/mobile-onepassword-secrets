@@ -96,7 +96,7 @@ seed_local_duplicates() {
 
     run bash "$CLI" write
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Multiple documents titled 'GoogleService-Info.plist'"* ]]
+    [[ "$output" == *"Cannot uniquely resolve document 'GoogleService-Info.plist'"* ]]
     ! grep -q "document create" "$OP_LOG"
     ! grep -q "document edit" "$OP_LOG"
 }
@@ -162,7 +162,7 @@ seed_local_duplicates() {
 
     run bash "$CLI" read
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Multiple documents titled 'GoogleService-Info.plist'"* ]]
+    [[ "$output" == *"Cannot uniquely resolve document 'GoogleService-Info.plist'"* ]]
     [ ! -f Staging/GoogleService-Info.plist ]
     [ ! -f Production/GoogleService-Info.plist ]
 }
@@ -175,6 +175,55 @@ seed_local_duplicates() {
     [ "$(cat Staging/GoogleService-Info.plist)" = "only-one" ]
     [ ! -f Production/GoogleService-Info.plist ]
     [ "$(grep -c "document get" "$OP_LOG")" -eq 1 ]
+}
+
+@test "write uploads a duplicated literal entry only once" {
+    cat > secrets.config.json <<'JSON'
+{
+  "vaults": [
+    { "vault": "v-staging",
+      "files": ["Keys/Keys.staging.swift", "Keys/Keys.staging.swift"] }
+  ]
+}
+JSON
+    mkdir -p Keys
+    echo k > Keys/Keys.staging.swift
+
+    run bash "$CLI" write
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "document create" "$OP_LOG")" -eq 1 ]
+
+    run bash "$CLI" write
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "document create" "$OP_LOG")" -eq 1 ]
+    [[ "$output" != *"Cannot uniquely resolve"* ]]
+}
+
+@test "write skips a vault it cannot list instead of creating duplicates" {
+    seed_local_duplicates
+
+    OP_FAKE_FAIL_ITEM_LIST=1 run bash "$CLI" write
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Could not list documents in 'v-staging'"* ]]
+    ! grep -q "document create" "$OP_LOG"
+}
+
+@test "read skips a vault it cannot list instead of reporting missing" {
+    seed_op_item v-staging Keys.staging.swift keys Keys/Keys.staging.swift > /dev/null
+
+    OP_FAKE_FAIL_ITEM_LIST=1 run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Could not list documents in 'v-staging'"* ]]
+    [[ "$output" != *"No document in"* ]]
+    ! grep -q "document get" "$OP_LOG"
+}
+
+@test "write scopes item listing to document items" {
+    seed_local_duplicates
+
+    run bash "$CLI" write
+    [ "$status" -eq 0 ]
+    grep -q "item list --vault v-staging --categories Document --format json" "$OP_LOG"
 }
 
 @test "read lists each vault's items once per run" {

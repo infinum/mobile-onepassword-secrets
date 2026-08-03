@@ -103,6 +103,13 @@ Vault/Keys/sub/c.swift" ]
     ! is_safe_rel_path ''
 }
 
+@test "is_safe_rel_path rejects a leading dash" {
+    ! is_safe_rel_path '-p/evil.txt'
+    ! is_safe_rel_path '--force'
+    is_safe_rel_path 'a/-b/c.txt'
+    is_safe_rel_path 'a-b.txt'
+}
+
 @test "is_safe_rel_path accepts ordinary repo paths" {
     is_safe_rel_path 'a..b/c.txt'
     is_safe_rel_path '.env.staging'

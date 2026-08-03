@@ -46,12 +46,13 @@ load_config() {
         return 1
     fi
 
-    # Paths must stay inside the repo and be ':'-free (file_vaults encodes
-    # entries as "relpath:vault").
+    # Paths must stay inside the repo, not read as CLI flags (leading '-'),
+    # and be ':'-free (file_vaults encodes entries as "relpath:vault").
     if jq -e '[.vaults[].files[]] | any(startswith("/") or startswith("~")
-              or contains(":") or (split("/") | any(. == "..")))' \
+              or startswith("-") or contains(":")
+              or (split("/") | any(. == "..")))' \
             "$config_path" >/dev/null 2>&1; then
-        echo "Error: 'files' entries must be repo-relative paths without '..' or ':' in $config_path." >&2
+        echo "Error: 'files' entries must be repo-relative paths without '..' or ':' (and not start with '-') in $config_path." >&2
         return 1
     fi
 
