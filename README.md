@@ -74,9 +74,10 @@ app-secrets --help        # full help
   `$APP_SECRETS_OPENER`, then `$VISUAL` / `$EDITOR`, then `open` (macOS) /
   `xdg-open` (Linux). Pass `--no-open` to skip opening (opening is also skipped
   when non-interactive, e.g. CI).
-- `read` fetches each configured file's document (by title) from its vault into
-  that file's path, creating folders as needed. Vaults you can't access are
-  skipped rather than failing the whole run.
+- `read` fetches each configured file's document (matched by title and the
+  `path` field, then fetched by item id) from its vault into that file's path,
+  creating folders as needed. Vaults you can't access are skipped rather than
+  failing the whole run.
 - `write` uploads each configured file that exists locally (create if the
   document is absent, edit if present). Missing local files are skipped. It
   previews the upload and asks for confirmation when run interactively;
@@ -97,10 +98,18 @@ files that belong to it.
 | `vaults[].name` | string | Optional friendly label; `read <label>` / `write <label>` resolve it. |
 | `vaults[].files` | string[] | File paths, relative to the repo root, that live in this vault (required, non-empty). |
 
-The **1Password document title is the file name** (including extension). The
-folder part of a path is never stored in 1Password — it only decides where the
-file lands locally. For example `App/Secrets/Keys.staging.swift` is stored as a
-document titled `Keys.staging.swift`.
+The **1Password document title is the file name** (including extension). For
+example `App/Secrets/Keys.staging.swift` is stored as a document titled
+`Keys.staging.swift`. The full repo-relative path is stored on the item as a
+custom **`path` text field**: `write` stamps it automatically, and both
+commands use it to tell apart files that share a name but live in different
+folders — a target-based layout such as `Staging/GoogleService-Info.plist` and
+`Production/GoogleService-Info.plist` maps to two documents with the same
+title in one vault, disambiguated by their `path` fields. A document without
+the field (for example one created by hand in 1Password) is matched by title
+alone as long as that title is unique in the vault, and gets stamped on the
+next `write`. Renaming or moving a file makes `write` create a new document —
+archive the old one in 1Password manually.
 
 ### The config depends on your folder structure
 
@@ -227,8 +236,10 @@ sources/
 ├── __auto_update.sh      # __script_auto_update — powers --update
 └── helpers/
     ├── __config.sh       # load + parse .secrets.config.json (via jq) into bash vars
-    └── __op_utils.sh     # op/jq checks, sign-in/service-account, vault access
-tests/                    # bats-core suite + fake `op` shim
+    └── __op_utils.sh     # op/jq checks, sign-in/service-account, vault access,
+                          # path-field item resolution
+tests/                    # bats-core suite
+└── helpers/              # stateful fake `op` shim + shared bats setup
 ```
 
 The entry point glob-sources `sources/helpers/*.sh` then `sources/*.sh`, so every
@@ -265,12 +276,12 @@ Planned and proposed improvements — contributions welcome.
 
 **Next up**
 
-- [ ] **Disambiguate same-named files in one vault.** The 1Password document title
-  is currently the file name, so two files that share a name but live in different
+- [x] **Disambiguate same-named files in one vault.** The 1Password document title
+  is the file name, so two files that share a name but live in different
   folders — a target-based layout, e.g. `Staging/GoogleService-Info.plist` and
-  `Production/GoogleService-Info.plist` — collide when they belong to the same vault.
-  Store each file's repo-relative path on the 1Password item as a custom field and
-  match on that instead of the title alone.
+  `Production/GoogleService-Info.plist` — used to collide when they belong to the
+  same vault. Each file's repo-relative path is now stored on the 1Password item
+  as a custom `path` field and matched instead of the title alone.
 - [ ] **Glob / folder patterns in `files`.** Once the path is stored on the item,
   `read` can reconstruct each file's destination — which removes today's blocker — so
   `files` could accept globs (e.g. `Vault/**/*.staging.*`), expanded on `write`.

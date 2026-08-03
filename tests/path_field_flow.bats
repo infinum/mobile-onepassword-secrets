@@ -124,3 +124,63 @@ seed_local_duplicates() {
     [ "$status" -eq 0 ]
     [ "$(grep -c "item list --vault v-staging" "$OP_LOG")" -eq 1 ]
 }
+
+@test "read fetches same-titled items to their own paths by id" {
+    id1=$(seed_op_item v-staging GoogleService-Info.plist staging-doc Staging/GoogleService-Info.plist)
+    id2=$(seed_op_item v-staging GoogleService-Info.plist production-doc Production/GoogleService-Info.plist)
+    seed_op_item v-staging Keys.staging.swift keys-doc Keys/Keys.staging.swift > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+
+    [ "$(cat Staging/GoogleService-Info.plist)" = "staging-doc" ]
+    [ "$(cat Production/GoogleService-Info.plist)" = "production-doc" ]
+    [ "$(cat Keys/Keys.staging.swift)" = "keys-doc" ]
+    grep -q "document get $id1 --vault v-staging --out-file Staging/GoogleService-Info.plist --force" "$OP_LOG"
+    grep -q "document get $id2 --vault v-staging --out-file Production/GoogleService-Info.plist --force" "$OP_LOG"
+}
+
+@test "read adopts a single unstamped title match without stamping" {
+    seed_op_item v-staging Keys.staging.swift keys-doc > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [ "$(cat Keys/Keys.staging.swift)" = "keys-doc" ]
+    ! grep -q "item edit" "$OP_LOG"
+}
+
+@test "read reports missing documents and continues" {
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"No document in 'v-staging' for Staging/GoogleService-Info.plist"* ]]
+    [[ "$output" == *"Done!"* ]]
+}
+
+@test "read skips ambiguous title matches and continues" {
+    seed_op_item v-staging GoogleService-Info.plist c1 > /dev/null
+    seed_op_item v-staging GoogleService-Info.plist c2 > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Multiple documents titled 'GoogleService-Info.plist'"* ]]
+    [ ! -f Staging/GoogleService-Info.plist ]
+    [ ! -f Production/GoogleService-Info.plist ]
+}
+
+@test "read does not adopt the same item for two entries" {
+    seed_op_item v-staging GoogleService-Info.plist only-one > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [ "$(cat Staging/GoogleService-Info.plist)" = "only-one" ]
+    [ ! -f Production/GoogleService-Info.plist ]
+    [ "$(grep -c "document get" "$OP_LOG")" -eq 1 ]
+}
+
+@test "read lists each vault's items once per run" {
+    seed_op_item v-staging Keys.staging.swift k Keys/Keys.staging.swift > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "item list --vault v-staging" "$OP_LOG")" -eq 1 ]
+}

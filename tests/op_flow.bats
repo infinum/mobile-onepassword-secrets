@@ -51,9 +51,10 @@ seed_configured_docs() {
     [ -f "$WORKDIR/Config/Config.dev.json" ]
     [ -f "$WORKDIR/Keys/Keys.production.swift" ]
 
-    grep -q "document get Keys.staging.swift --vault v-staging --out-file Keys/Keys.staging.swift --force" "$OP_LOG"
-    grep -q "document get Config.dev.json --vault v-staging --out-file Config/Config.dev.json --force" "$OP_LOG"
-    grep -q "document get Keys.production.swift --vault v-prod --out-file Keys/Keys.production.swift --force" "$OP_LOG"
+    # Fetches go through resolved item ids (seeded in order item0001..0003).
+    grep -q "document get item0001 --vault v-staging --out-file Keys/Keys.staging.swift --force" "$OP_LOG"
+    grep -q "document get item0002 --vault v-staging --out-file Config/Config.dev.json --force" "$OP_LOG"
+    grep -q "document get item0003 --vault v-prod --out-file Keys/Keys.production.swift --force" "$OP_LOG"
 }
 
 @test "read <label> restricts to that vault" {
@@ -64,7 +65,7 @@ seed_configured_docs() {
 
     [ -f "$WORKDIR/Keys/Keys.production.swift" ]
     [ ! -f "$WORKDIR/Keys/Keys.staging.swift" ]
-    ! grep -q "document get Keys.staging.swift" "$OP_LOG"
+    ! grep -q -- "--out-file Keys/Keys.staging.swift" "$OP_LOG"
 }
 
 @test "write uploads existing files titled by filename (no folder)" {

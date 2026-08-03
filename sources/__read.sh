@@ -52,7 +52,11 @@ __read() {
     echo "Fetching configurations..."
     echo
 
-    local entry rel vault title dir
+    # Resolve each file to its item (title + 'path' field) and fetch by id.
+    # claimed ids stop two same-named entries from downloading the same
+    # unstamped document. Read never stamps — it must work with read-only
+    # vault access; write is what stamps.
+    local entry rel vault title verdict action id claimed=""
     for entry in "${file_vaults[@]+"${file_vaults[@]}"}"; do
         rel="${entry%:*}"
         vault="${entry##*:}"
@@ -66,14 +70,28 @@ __read() {
         fi
 
         title=$(doc_title_for "$rel")
-        dir=$(dirname "$rel")
-        mkdir -p "$dir"
+        get_vault_items "$vault" > /dev/null   # warm the cache in this shell
+        verdict=$(resolve_item_for_path "$vault" "$rel" "$claimed")
+        action="${verdict%% *}"
+        id="${verdict#* }"
 
-        if op document get "$title" --vault "$vault" --out-file "$rel" --force; then
-            echo "[+] $rel (from $vault, document '$title')"
-        else
-            echo "[!] Could not fetch document '$title' from '$vault' for $rel"
-        fi
+        case "$action" in
+            found|adopt)
+                mkdir -p "$(dirname "$rel")"
+                if op document get "$id" --vault "$vault" --out-file "$rel" --force; then
+                    claimed="${claimed:+$claimed,}$id"
+                    echo "[+] $rel (from $vault, document '$title')"
+                else
+                    echo "[!] Could not fetch document '$title' from '$vault' for $rel"
+                fi
+                ;;
+            none)
+                echo "[!] No document in '$vault' for $rel (title '$title')"
+                ;;
+            ambiguous)
+                echo "[!] Multiple documents titled '$title' in '$vault' and none matches path '$rel' — skipping. Run '$CLI_NAME write' to stamp items, or set the 'path' field manually."
+                ;;
+        esac
     done
 
     echo

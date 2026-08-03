@@ -64,3 +64,47 @@ setup() {
     [ "$status" -ne 0 ]
     [[ "$output" == *"non-empty"* ]]
 }
+
+@test "load_config rejects absolute file paths" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v","files":["/etc/passwd"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"repo-relative"* ]]
+}
+
+@test "load_config rejects paths with .. components" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v","files":["a/../b.txt"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"repo-relative"* ]]
+}
+
+@test "load_config rejects home-relative paths" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v","files":["~/x.txt"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"repo-relative"* ]]
+}
+
+@test "load_config rejects paths containing a colon" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v","files":["a:b.txt"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"repo-relative"* ]]
+}
+
+@test "load_config accepts dotted names that are not traversals" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v","files":["a..b/c.txt", ".env.staging"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -eq 0 ]
+}
