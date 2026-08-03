@@ -198,6 +198,82 @@ can_write_vault() {
         > /dev/null 2>&1
 }
 
+# --- Path-field item resolution ---------------------------------------------
+# The document title is the file's base name, so two files sharing a name but
+# living in different folders need more than the title to tell apart. write
+# stamps each item with a custom text field 'path' holding the repo-relative
+# path; resolution matches on it, and read/write then operate by item ID.
+
+# Per-vault cache of full item JSON (bash 3.2: no assoc arrays, so parallel
+# indexed arrays). Command substitution runs in a subshell, where cache writes
+# are lost — callers that loop should warm the cache once per vault with a
+# direct `get_vault_items <vault> >/dev/null` first.
+_vault_items_names=()
+_vault_items_json=()
+
+# Echoes a JSON array of full items (id, title, fields) for a vault; cached.
+# Always returns 0; op failures and empty vaults yield [].
+get_vault_items() {
+    local vault="$1" i list
+    for i in ${_vault_items_names[@]+"${!_vault_items_names[@]}"}; do
+        if [[ "${_vault_items_names[$i]}" == "$vault" ]]; then
+            printf '%s\n' "${_vault_items_json[$i]}"
+            return 0
+        fi
+    done
+    if ! list=$(op item list --vault "$vault" --format json 2>/dev/null); then
+        list="[]"
+    fi
+    if [[ -z "$list" ]] || printf '%s' "$list" | jq -e 'length == 0' >/dev/null 2>&1; then
+        list="[]"
+    else
+        # One batched fetch for the whole vault: pipe the summaries into
+        # `op item get -`, which emits a stream of full items; slurp to an array.
+        if ! list=$(printf '%s' "$list" | op item get - --format json 2>/dev/null | jq -s '.'); then
+            list="[]"
+        fi
+    fi
+    _vault_items_names+=("$vault")
+    _vault_items_json+=("$list")
+    printf '%s\n' "$list"
+    return 0
+}
+
+# Resolves the 1Password item for a repo-relative path within a vault.
+# Always returns 0 (pipefail-friendly); echoes a verdict:
+#   "found <id>"  exactly one title candidate whose 'path' field matches
+#   "adopt <id>"  no path match, but a single candidate with no 'path' field
+#   "none"        nothing to reuse (write should create; read reports missing)
+#   "ambiguous"   duplicate stamps, or several candidates incl. unstamped ones
+# The optional claimed-ids csv excludes items already matched this run, so two
+# entries sharing a base name can't adopt the same unstamped item.
+# Usage: resolve_item_for_path <vault> <relpath> [claimed_ids_csv]
+resolve_item_for_path() {
+    local vault="$1" rel="$2" claimed="${3:-}" title items
+    title=$(doc_title_for "$rel")
+    items=$(get_vault_items "$vault")
+    printf '%s' "$items" | jq -r --arg t "$title" --arg p "$rel" --arg cl "$claimed" '
+        ($cl | split(",")) as $claimed
+        | [ .[] | select(.title == $t) | select([.id] | inside($claimed) | not) ] as $cand
+        | [ $cand[] | select((.fields // []) | any(.label == "path" and .value == $p)) ] as $exact
+        | [ $cand[] | select((.fields // []) | any(.label == "path") | not) ] as $unstamped
+        | if   ($exact | length) == 1 then "found \($exact[0].id)"
+          elif ($exact | length) >  1 then "ambiguous"
+          elif ($cand  | length) == 0 then "none"
+          elif ($unstamped | length) == 0 then "none"
+          elif ($cand | length) == 1 then "adopt \($cand[0].id)"
+          else "ambiguous"
+          end'
+    return 0
+}
+
+# Stamps the repo-relative path onto an item as the 'path' text field
+# (creates the field or updates it in place).
+# Usage: stamp_item_path <item_id> <relpath> <vault>
+stamp_item_path() {
+    op item edit "$1" "path[text]=$2" --vault "$3" >/dev/null 2>&1
+}
+
 # Prints each vault with a green check or red cross per the given check function.
 print_vault_access() {
     local check_fn="$1"  # can_access_vault or can_write_vault
