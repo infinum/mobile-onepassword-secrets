@@ -3,6 +3,7 @@
 # shellcheck disable=SC2034
 # Finds and parses .secrets.config.json into bash vars/arrays.
 # Produces: vaults (1Password vault names); file_vaults ("relpath:vault");
+#           pattern_vaults ("pattern:vault" for glob/folder entries);
 #           vault_aliases ("label:vault" and "vault:vault" for filtering).
 
 # Locates the config file in the current directory.
@@ -59,10 +60,17 @@ load_config() {
     while IFS= read -r line; do vaults+=("$line"); done \
         < <(jq -r '.vaults[].vault' "$config_path")
 
-    # "relpath:vault" per file. Consumed by read (fetch) and write (route).
+    # "relpath:vault" per literal file, "pattern:vault" per glob/folder entry.
+    # Consumed by read (fetch/match) and write (route/expand).
     file_vaults=()
-    while IFS= read -r line; do file_vaults+=("$line"); done \
-        < <(jq -r '.vaults[] | .vault as $v | .files[] | . + ":" + $v' "$config_path")
+    pattern_vaults=()
+    while IFS= read -r line; do
+        if is_glob_entry "${line%:*}"; then
+            pattern_vaults+=("$line")
+        else
+            file_vaults+=("$line")
+        fi
+    done < <(jq -r '.vaults[] | .vault as $v | .files[] | . + ":" + $v' "$config_path")
 
     # "alias:vault" for the optional friendly name and the vault name itself,
     # so `read <name>` and `read <vault>` both resolve.

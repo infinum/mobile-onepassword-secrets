@@ -2,6 +2,7 @@
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
     source "$REPO_ROOT/sources/__constants.sh"
+    source "$REPO_ROOT/sources/helpers/__path_utils.sh"
     source "$REPO_ROOT/sources/helpers/__config.sh"
     FIXTURE="$REPO_ROOT/tests/fixtures/valid.config.json"
 }
@@ -95,6 +96,33 @@ setup() {
 @test "load_config rejects paths containing a colon" {
     tmp="$(mktemp)"
     echo '{"vaults":[{"vault":"v","files":["a:b.txt"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"repo-relative"* ]]
+}
+
+@test "load_config splits glob entries into pattern_vaults" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v","files":["Keys/K.swift","Vault/**/*.plist","Certs/"]}]}' > "$tmp"
+    load_config "$tmp"
+    rm -f "$tmp"
+    [ "${#file_vaults[@]}" -eq 1 ]
+    [ "${file_vaults[0]}" = "Keys/K.swift:v" ]
+    [ "${#pattern_vaults[@]}" -eq 2 ]
+    [ "${pattern_vaults[0]}" = "Vault/**/*.plist:v" ]
+    [ "${pattern_vaults[1]}" = "Certs/:v" ]
+}
+
+@test "load_config leaves pattern_vaults empty for literal-only configs" {
+    load_config "$FIXTURE"
+    [ "${#pattern_vaults[@]}" -eq 0 ]
+    [ "${#file_vaults[@]}" -eq 3 ]
+}
+
+@test "load_config rejects traversal inside glob entries" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v","files":["Vault/../**"]}]}' > "$tmp"
     run load_config "$tmp"
     rm -f "$tmp"
     [ "$status" -ne 0 ]
