@@ -52,6 +52,22 @@ op_signed_in() {
     op_bounded "${1:-10}" op whoami
 }
 
+# Ensures a usable op session before any vault access checks. The first op
+# call triggers the desktop-app sign-in prompt and blocks until it resolves
+# (service accounts answer instantly), so this must run before the access
+# matrix — a still-pending sign-in would otherwise read as "no access" (✗)
+# for whichever vault happens to be checked first. Interactive by design:
+# unlike op_signed_in (doctor's bounded, non-interactive probe), this call
+# is meant to wait for the user. Prints a hint and fails if no session
+# could be established.
+ensure_op_session() {
+    if op whoami >/dev/null 2>&1; then
+        return 0
+    fi
+    echo "Error: not signed in to 1Password. Unlock the 1Password app (or run 'op signin'), then retry." >&2
+    return 1
+}
+
 # True if a 1Password service-account token is configured. `op` uses it
 # automatically (CI-friendly, no desktop app). Service accounts have no user
 # identity, so user-based permission checks don't apply to them.

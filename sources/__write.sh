@@ -29,8 +29,10 @@ __write() {
     setup_styles
     load_config || exit 1
 
-    # No sign-in precheck: op prompts for sign-in on its first call (via the
-    # 1Password app integration), or uses OP_SERVICE_ACCOUNT_TOKEN on CI.
+    # Establish the op session up front (may prompt via the 1Password app;
+    # OP_SERVICE_ACCOUNT_TOKEN answers instantly on CI). Doing it before the
+    # access checks keeps a pending sign-in from reading as "no vault access".
+    ensure_op_session || exit 1
 
     local vault_filter=""
     if [[ -n "$arg" ]]; then

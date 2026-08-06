@@ -28,6 +28,7 @@ flag_val() {
 }
 
 if [ "$1" = whoami ]; then
+    [ "${OP_FAKE_FAIL_WHOAMI:-}" = 1 ] && exit 1
     echo '{"user_uuid":"u1"}'
 elif [ "$1" = vault ] && [ "$2" = list ]; then
     echo '[{"name":"v-staging"},{"name":"v-prod"}]'
@@ -124,5 +125,30 @@ teardown() {
     run bash "$CLI" write
     [ "$status" -ne 0 ]
     [[ "$output" == *"No local files to upload"* ]]
+    ! grep -q "document create" "$OP_LOG"
+}
+
+@test "read establishes an op session before checking vault access" {
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [ "$(head -1 "$OP_LOG")" = "whoami" ]
+}
+
+@test "read fails fast with a sign-in hint when no op session is available" {
+    OP_FAKE_FAIL_WHOAMI=1 run bash "$CLI" read
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"not signed in to 1Password"* ]]
+    ! grep -q "vault list" "$OP_LOG"
+    [[ "$output" != *"✗"* ]]
+}
+
+@test "write fails fast with a sign-in hint when no op session is available" {
+    mkdir -p "$WORKDIR/Keys"
+    echo v > "$WORKDIR/Keys/Keys.staging.swift"
+
+    OP_FAKE_FAIL_WHOAMI=1 run bash "$CLI" write
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"not signed in to 1Password"* ]]
+    ! grep -q "vault list" "$OP_LOG"
     ! grep -q "document create" "$OP_LOG"
 }
