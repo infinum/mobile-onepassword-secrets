@@ -222,6 +222,50 @@ refused on `read`. Note that `**` crosses directories wherever it appears —
 `a**b` matches `a/x/b` — unlike gitignore, where a non-boundary `**` degrades
 to `*`.
 
+#### Typical setups
+
+Depending on how a project lays out its secrets, glob handling enables a few
+common configuration styles:
+
+- **One secrets folder per environment vault.** Each vault owns the whole
+  folder via the trailing-slash shorthand, and new files sync without touching
+  the config:
+
+  ```json
+  "files": ["MyApp/SupportingFiles/Vault/"]
+  ```
+
+- **Shared tree, environment picked by suffix.** Both environments keep files
+  in the same folders; each vault selects its own by name:
+
+  ```json
+  "files": ["MyApp/Vault/**/*.staging.*"]     // staging vault
+  "files": ["MyApp/Vault/**/*.production.*"]  // production vault
+  ```
+
+- **Target-based folders with identical file names.** Folder shorthand per
+  vault; the stored `path` field keeps the same-named documents apart:
+
+  ```json
+  "files": ["Staging/"]      // e.g. Staging/GoogleService-Info.plist
+  "files": ["Production/"]   // e.g. Production/GoogleService-Info.plist
+  ```
+
+- **One file type, wherever it lives.** Scope by extension, optionally under a
+  subtree:
+
+  ```json
+  "files": ["**/*.xcconfig", "Certs/**/*.pem"]
+  ```
+
+- **Literal anchors plus a catch-all.** Must-have files stay explicit (so a
+  missing one is reported by name), the folder pattern picks up the rest — an
+  overlap syncs once:
+
+  ```json
+  "files": ["Keys/Keys.swift", "Keys/"]
+  ```
+
 ## Authentication
 
 - **Locally**, `app-secrets` uses your `op` session. Sign in through the
