@@ -252,6 +252,20 @@ JSON
     refute grep -q "document get" "$OP_LOG"
 }
 
+@test "read syncs the rest of a vault when one item is unreadable" {
+    seed_op_item v-staging Keys.staging.swift keys Keys/Keys.staging.swift > /dev/null
+    seed_op_item v-staging GoogleService-Info.plist s Staging/GoogleService-Info.plist > /dev/null
+    seed_op_item v-staging GoogleService-Info.plist p Production/GoogleService-Info.plist > /dev/null
+    bad=$(seed_op_item v-staging unrelated.txt junk Unrelated/unrelated.txt)
+
+    OP_FAKE_BAD_ITEM=$bad run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [ "$(cat Keys/Keys.staging.swift)" = "keys" ]
+    [ "$(cat Staging/GoogleService-Info.plist)" = "s" ]
+    [ "$(cat Production/GoogleService-Info.plist)" = "p" ]
+    [[ "$output" == *"Could not read item $bad"* ]]
+}
+
 @test "write scopes item listing to document items" {
     seed_local_duplicates
 

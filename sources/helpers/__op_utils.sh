@@ -211,12 +211,33 @@ can_write_vault() {
 _vault_items_names=()
 _vault_items_json=()
 
+# Fetches a vault's items one at a time from a list of summaries, skipping any
+# the CLI won't hand over (warning on stderr, since stdout is the result).
+# Echoes the JSON array of what came back, or FAILED if nothing did.
+_fetch_items_individually() {
+    local vault="$1" summaries="$2" id out acc=""
+    while IFS= read -r id; do
+        [[ -n "$id" ]] || continue
+        if out=$(op item get "$id" --vault "$vault" --format json 2>/dev/null); then
+            acc="${acc}${out}"
+        else
+            echo "[!] Could not read item $id in '$vault' — skipping it" >&2
+        fi
+    done < <(printf '%s' "$summaries" | jq -r '.[].id' 2>/dev/null)
+    if [[ -z "$acc" ]]; then
+        printf 'FAILED\n'
+        return 0
+    fi
+    printf '%s' "$acc" | jq -s '.'
+    return 0
+}
+
 # Echoes a JSON array of full Document items (id, title, fields) for a vault;
 # cached. Always returns 0. An op failure yields the FAILED sentinel — callers
 # must skip the vault rather than treat it as empty, or a transient outage
 # would make write create duplicates of every already-stored file.
 get_vault_items() {
-    local vault="$1" i list
+    local vault="$1" i list full
     for i in ${_vault_items_names[@]+"${!_vault_items_names[@]}"}; do
         if [[ "${_vault_items_names[$i]}" == "$vault" ]]; then
             printf '%s\n' "${_vault_items_json[$i]}"
@@ -229,9 +250,21 @@ get_vault_items() {
         list="[]"
     else
         # One batched fetch for the whole vault: pipe the summaries into
-        # `op item get -`, which emits a stream of full items; slurp to an array.
-        if ! list=$(printf '%s' "$list" | op item get - --format json 2>/dev/null | jq -s '.'); then
-            list="FAILED"
+        # `op item get -`, which emits a stream of full items; slurp to an
+        # array. The batch is all-or-nothing, so a single item the CLI can't
+        # render would otherwise take every configured file in the vault down
+        # with it — fall back to reading them one by one.
+        # Status is taken from `op` alone (last in the pipeline): callers that
+        # source this without `pipefail` must get the same sentinel.
+        if full=$(printf '%s' "$list" | op item get - --format json 2>/dev/null); then
+            full=$(printf '%s' "$full" | jq -s '.' 2>/dev/null) || full=""
+        else
+            full=""
+        fi
+        if [[ -n "$full" ]]; then
+            list="$full"
+        else
+            list=$(_fetch_items_individually "$vault" "$list")
         fi
     fi
     _vault_items_names+=("$vault")

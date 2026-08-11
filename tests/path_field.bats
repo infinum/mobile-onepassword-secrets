@@ -47,6 +47,25 @@ teardown() {
     refute grep -q "item get -" "$OP_LOG"
 }
 
+@test "get_vault_items falls back to per-item fetches when the batch fails" {
+    good=$(seed_op_item v-staging a.txt c1 a.txt)
+    bad=$(seed_op_item v-staging b.txt c2 b.txt)
+
+    # Only stdout is the result; the skip notice belongs on stderr.
+    out=$(OP_FAKE_BAD_ITEM=$bad get_vault_items v-staging 2>/dev/null)
+    echo "$out" | jq -e --arg g "$good" 'length == 1 and .[0].id == $g'
+
+    err=$(OP_FAKE_BAD_ITEM=$bad get_vault_items v-staging 2>&1 >/dev/null)
+    [[ "$err" == *"Could not read item $bad"* ]]
+}
+
+@test "get_vault_items reports FAILED only when no item can be read" {
+    id=$(seed_op_item v-staging a.txt c1 a.txt)
+
+    out=$(OP_FAKE_BAD_ITEM=$id get_vault_items v-staging 2>/dev/null)
+    [ "$out" = "FAILED" ]
+}
+
 @test "resolve reports none in an empty vault" {
     run resolve_item_for_path v-staging Keys/Keys.swift
     [ "$status" -eq 0 ]

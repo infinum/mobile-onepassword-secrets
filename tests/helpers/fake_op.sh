@@ -13,7 +13,10 @@
 # OP_FAKE_FAIL_WHOAMI=1 makes `whoami` fail (no usable session);
 # OP_FAKE_FAIL_DOC=<id> makes `document get/edit` fail for that one item;
 # OP_FAKE_FAIL_DOC_ONCE=<id> fails only the first `document get/edit` for it,
-# so a caller that reuses the id afterwards is caught.
+# so a caller that reuses the id afterwards is caught;
+# OP_FAKE_BAD_ITEM=<id> makes that one item unreadable — `item get <id>` fails
+# and, since one bad member sinks the whole request, so does the batched
+# `item get -`.
 
 printf '%s\n' "$*" >> "$OP_LOG"
 
@@ -128,11 +131,19 @@ if [ "$cmd" = item ] && [ "$sub" = get ]; then
     arg="${3:-}"
     if [ "$arg" = "-" ]; then
         # Batch mode: a JSON array of {id,...} on stdin -> stream of full items.
-        jq -r '.[].id' | while IFS= read -r id; do
+        batch=$(jq -r '.[].id')
+        if [ -n "${OP_FAKE_BAD_ITEM:-}" ] \
+           && printf '%s\n' "$batch" | grep -qx "$OP_FAKE_BAD_ITEM"; then
+            echo "could not read item $OP_FAKE_BAD_ITEM" >&2
+            exit 1
+        fi
+        printf '%s\n' "$batch" | while IFS= read -r id; do
+            [ -n "$id" ] || continue
             item_json "$id"
         done
         exit 0
     fi
+    [ "$arg" = "${OP_FAKE_BAD_ITEM:-}" ] && exit 1
     vault=$(flag_val --vault "$@") || vault=""
     ids=$(resolve_ids "$arg" "$vault")
     [ -z "$ids" ] && exit 1
