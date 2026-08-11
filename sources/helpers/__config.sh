@@ -37,22 +37,40 @@ load_config() {
         return 1
     fi
 
-    # Every vault entry needs a non-empty 'vault' name and non-empty 'files'.
+    # Every vault entry needs a non-empty 'vault' name and non-empty 'files',
+    # and every 'files' entry must itself be a non-empty string — a number or
+    # object here would sail through the path checks below (jq errors out on
+    # them, which reads as "no match") and only break at fetch time.
     if ! jq -e '.vaults | type == "array" and length > 0
                 and all(.[]; (.vault | type == "string" and length > 0)
-                             and (.files | type == "array" and length > 0))' \
+                             and ((.name // "") | type == "string")
+                             and (.files | type == "array" and length > 0)
+                             and all(.files[]; type == "string" and length > 0))' \
             "$config_path" >/dev/null 2>&1; then
-        echo "Error: each vault in $config_path needs a non-empty 'vault' and 'files'." >&2
+        echo "Error: each vault in $config_path needs a non-empty 'vault' and a 'files' list of non-empty strings." >&2
+        return 1
+    fi
+
+    # ':' separates the fields in the "relpath:vault" and "label:vault"
+    # encodings below, so a colon anywhere in a vault name or label would
+    # silently reroute entries.
+    if jq -e '[.vaults[] | .vault, (.name // empty)] | any(contains(":"))' \
+            "$config_path" >/dev/null 2>&1; then
+        echo "Error: vault names and labels must not contain ':' in $config_path." >&2
         return 1
     fi
 
     # Paths must stay inside the repo, not read as CLI flags (leading '-'),
-    # and be ':'-free (file_vaults encodes entries as "relpath:vault").
+    # and be ':'-free. Components are checked after dropping the folder
+    # shorthand's trailing slash, so 'Certs/' passes but './x', 'a/./b' and
+    # 'a//b' don't — those normalize to a different string than the one that
+    # would be stamped on the item, which would then never match on read.
     if jq -e '[.vaults[].files[]] | any(startswith("/") or startswith("~")
               or startswith("-") or contains(":")
-              or (split("/") | any(. == "..")))' \
+              or (sub("/$"; "") | split("/")
+                  | any(. == ".." or . == "." or . == "")))' \
             "$config_path" >/dev/null 2>&1; then
-        echo "Error: 'files' entries must be repo-relative paths without '..' or ':' (and not start with '-') in $config_path." >&2
+        echo "Error: 'files' entries must be repo-relative paths without '.', '..', '//' or ':' (and not start with '-') in $config_path." >&2
         return 1
     fi
 

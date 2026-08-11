@@ -138,6 +138,51 @@ setup() {
     [[ "$output" == *"repo-relative"* ]]
 }
 
+@test "load_config rejects a non-string files entry" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v","files":[42]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+}
+
+@test "load_config rejects '.' and empty path components" {
+    for bad in './Keys/K.swift' 'Keys/./K.swift' 'Keys//K.swift' '.'; do
+        tmp="$(mktemp)"
+        printf '{"vaults":[{"vault":"v","files":["%s"]}]}' "$bad" > "$tmp"
+        run load_config "$tmp"
+        rm -f "$tmp"
+        [ "$status" -ne 0 ] || {
+            echo "accepted bad path: $bad"
+            return 1
+        }
+    done
+}
+
+@test "load_config still accepts the trailing-slash folder shorthand" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v","files":["Certs/","Vault/Keys/"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -eq 0 ]
+}
+
+@test "load_config rejects a colon in a vault name or label" {
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"vault":"v:1","files":["a.txt"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"':'"* ]]
+
+    tmp="$(mktemp)"
+    echo '{"vaults":[{"name":"a:b","vault":"v","files":["a.txt"]}]}' > "$tmp"
+    run load_config "$tmp"
+    rm -f "$tmp"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"':'"* ]]
+}
+
 @test "load_config accepts dotted names that are not traversals" {
     tmp="$(mktemp)"
     echo '{"vaults":[{"vault":"v","files":["a..b/c.txt", ".env.staging"]}]}' > "$tmp"
