@@ -58,6 +58,9 @@ __read() {
     # claimed ids stop two same-named entries from downloading the same
     # unstamped document. Read never stamps — it must work with read-only
     # vault access; write is what stamps.
+    # Anything that leaves a configured file out of sync flips this; the run
+    # ends non-zero so CI cannot mistake a half-empty checkout for a good one.
+    local failed=0
     local entry rel vault title verdict action id claimed=""
     for entry in "${file_vaults[@]+"${file_vaults[@]}"}"; do
         rel="${entry%:*}"
@@ -68,6 +71,7 @@ __read() {
         fi
         if ! can_access_vault "$vault"; then
             echo "[!] No access to '$vault', skipping $rel"
+            failed=1
             continue
         fi
 
@@ -88,16 +92,20 @@ __read() {
                     echo "[+] $rel (from $vault, document '$title')"
                 else
                     echo "[!] Could not fetch document '$title' from '$vault' for $rel"
+                    failed=1
                 fi
                 ;;
             none)
                 echo "[!] No document in '$vault' for $rel (title '$title')"
+                failed=1
                 ;;
             ambiguous)
                 echo "[!] Cannot uniquely resolve document '$title' in '$vault' for path '$rel' — skipping. Run '$CLI_NAME write' to stamp items, or clean up duplicates in 1Password."
+                failed=1
                 ;;
             error)
                 echo "[!] Could not list documents in '$vault', skipping $rel"
+                failed=1
                 ;;
         esac
     done
@@ -116,12 +124,14 @@ __read() {
         fi
         if ! can_access_vault "$vault"; then
             echo "[!] No access to '$vault', skipping pattern $pat"
+            failed=1
             continue
         fi
 
         regex=$(glob_to_regex "$(normalize_pattern "$pat")")
-        if [[ "$(get_vault_items "$vault")" == "FAILED" ]]; then   # also warms the cache
+        if [[ "$(get_vault_items "$vault")" == "FAILED" ]]; then
             echo "[!] Could not list documents in '$vault', skipping pattern $pat"
+            failed=1
             continue
         fi
         matched=0
@@ -132,14 +142,16 @@ __read() {
             case ",$claimed," in *",$id,"*) continue ;; esac
             if ! is_safe_rel_path "$rpath"; then
                 echo "[!] Refusing unsafe path from document in '$vault': $rpath"
+                failed=1
                 continue
             fi
+            claimed="${claimed:+$claimed,}$id"
             mkdir -p -- "$(dirname -- "$rpath")"
             if op document get "$id" --vault "$vault" --out-file "$rpath" --force; then
-                claimed="${claimed:+$claimed,}$id"
                 echo "[+] $rpath (from $vault, pattern '$pat')"
             else
                 echo "[!] Could not fetch document for $rpath from '$vault'"
+                failed=1
             fi
         done < <(get_vault_items "$vault" | jq -r '.[] | . as $it | (.fields // [])[]
             | select(.label == "path") | [$it.id, .value] | @tsv')
@@ -149,6 +161,10 @@ __read() {
     done
 
     echo
+    if [[ "$failed" -ne 0 ]]; then
+        echo "Done, with errors — some configured files were not downloaded."
+        return 1
+    fi
     echo "Done!"
     return 0
 }

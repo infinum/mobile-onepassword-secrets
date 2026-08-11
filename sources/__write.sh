@@ -154,6 +154,10 @@ __write() {
     # Resolve each file to its item (title + 'path' field), then edit by id or
     # create-and-stamp. claimed ids stop two same-named entries from adopting
     # the same unstamped item.
+    # Anything that leaves a collected file unpublished (or an item in an
+    # inconsistent state) flips this; the run ends non-zero so CI cannot
+    # mistake "uploaded nothing" for "uploaded everything".
+    local failed=0
     local file verdict action id out new_id claimed=""
     for i in "${!up_files[@]}"; do
         file="${up_files[$i]}"
@@ -171,39 +175,52 @@ __write() {
                 claimed="${claimed:+$claimed,}$id"
                 if ! op document edit "$id" "$file" --vault "$vault"; then
                     echo "[!] Could not upload $file to '$vault'"
+                    failed=1
                     continue
                 fi
                 if [[ "$action" == "adopt" ]]; then
-                    stamp_item_path "$id" "$file" "$vault" \
-                        || echo "[!] Uploaded, but could not set 'path' on document '$title' in '$vault'"
+                    stamp_item_path "$id" "$file" "$vault" || {
+                        echo "[!] Uploaded, but could not set 'path' on document '$title' in '$vault'"
+                        failed=1
+                    }
                 fi
                 echo "[+] $file → $vault (document '$title')"
                 ;;
             none)
                 if ! out=$(op document create "$file" --title "$title" --vault "$vault" --format json); then
                     echo "[!] Could not upload $file to '$vault'"
+                    failed=1
                     continue
                 fi
                 new_id=$(printf '%s' "$out" | jq -r '.id // .uuid // empty' 2>/dev/null) || new_id=""
                 if [[ -n "$new_id" ]]; then
-                    stamp_item_path "$new_id" "$file" "$vault" \
-                        || echo "[!] Uploaded, but could not set 'path' on document '$title' in '$vault'"
+                    stamp_item_path "$new_id" "$file" "$vault" || {
+                        echo "[!] Uploaded, but could not set 'path' on document '$title' in '$vault'"
+                        failed=1
+                    }
                     claimed="${claimed:+$claimed,}$new_id"
                 else
                     echo "[!] Uploaded, but could not read the new item id to set 'path' (the next write adopts and stamps it)"
+                    failed=1
                 fi
                 echo "[+] $file → $vault (document '$title')"
                 ;;
             ambiguous)
                 echo "[!] Cannot uniquely resolve document '$title' in '$vault' for path '$file' — skipping. Remove duplicate items in 1Password, or make sure exactly one carries a 'path' field with this value."
+                failed=1
                 ;;
             error)
                 echo "[!] Could not list documents in '$vault', skipping $file"
+                failed=1
                 ;;
         esac
     done
 
     echo
+    if [[ "$failed" -ne 0 ]]; then
+        echo "Done, with errors — some files were not uploaded."
+        return 1
+    fi
     echo "Done!"
     return 0
 }

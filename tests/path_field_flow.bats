@@ -95,7 +95,7 @@ seed_local_duplicates() {
     echo local > Staging/GoogleService-Info.plist
 
     run bash "$CLI" write
-    [ "$status" -eq 0 ]
+    [ "$status" -ne 0 ]
     [[ "$output" == *"Cannot uniquely resolve document 'GoogleService-Info.plist'"* ]]
     refute grep -q "document create" "$OP_LOG"
     refute grep -q "document edit" "$OP_LOG"
@@ -106,7 +106,7 @@ seed_local_duplicates() {
     echo local > Staging/GoogleService-Info.plist
 
     OP_FAKE_BROKEN_CREATE=1 run bash "$CLI" write
-    [ "$status" -eq 0 ]
+    [ "$status" -ne 0 ]
     [[ "$output" == *"could not read the new item id"* ]]
     refute grep -q "item edit" "$OP_LOG"
 
@@ -141,6 +141,13 @@ seed_local_duplicates() {
 }
 
 @test "read adopts a single unstamped title match without stamping" {
+    cat > .secrets.config.json <<'JSON'
+{
+  "vaults": [
+    { "vault": "v-staging", "files": ["Keys/Keys.staging.swift"] }
+  ]
+}
+JSON
     seed_op_item v-staging Keys.staging.swift keys-doc > /dev/null
 
     run bash "$CLI" read
@@ -151,9 +158,10 @@ seed_local_duplicates() {
 
 @test "read reports missing documents and continues" {
     run bash "$CLI" read
-    [ "$status" -eq 0 ]
+    [ "$status" -ne 0 ]
     [[ "$output" == *"No document in 'v-staging' for Staging/GoogleService-Info.plist"* ]]
-    [[ "$output" == *"Done!"* ]]
+    [[ "$output" == *"No document in 'v-staging' for Keys/Keys.staging.swift"* ]]
+    [[ "$output" == *"Done, with errors"* ]]
 }
 
 @test "read skips ambiguous title matches and continues" {
@@ -161,7 +169,7 @@ seed_local_duplicates() {
     seed_op_item v-staging GoogleService-Info.plist c2 > /dev/null
 
     run bash "$CLI" read
-    [ "$status" -eq 0 ]
+    [ "$status" -ne 0 ]
     [[ "$output" == *"Cannot uniquely resolve document 'GoogleService-Info.plist'"* ]]
     [ ! -f Staging/GoogleService-Info.plist ]
     [ ! -f Production/GoogleService-Info.plist ]
@@ -171,7 +179,7 @@ seed_local_duplicates() {
     seed_op_item v-staging GoogleService-Info.plist only-one > /dev/null
 
     run bash "$CLI" read
-    [ "$status" -eq 0 ]
+    [ "$status" -ne 0 ]
     [ "$(cat Staging/GoogleService-Info.plist)" = "only-one" ]
     [ ! -f Production/GoogleService-Info.plist ]
     [ "$(grep -c "document get" "$OP_LOG")" -eq 1 ]
@@ -229,7 +237,7 @@ JSON
     seed_local_duplicates
 
     OP_FAKE_FAIL_ITEM_LIST=1 run bash "$CLI" write
-    [ "$status" -eq 0 ]
+    [ "$status" -ne 0 ]
     [[ "$output" == *"Could not list documents in 'v-staging'"* ]]
     refute grep -q "document create" "$OP_LOG"
 }
@@ -238,7 +246,7 @@ JSON
     seed_op_item v-staging Keys.staging.swift keys Keys/Keys.staging.swift > /dev/null
 
     OP_FAKE_FAIL_ITEM_LIST=1 run bash "$CLI" read
-    [ "$status" -eq 0 ]
+    [ "$status" -ne 0 ]
     [[ "$output" == *"Could not list documents in 'v-staging'"* ]]
     [[ "$output" != *"No document in"* ]]
     refute grep -q "document get" "$OP_LOG"
@@ -254,6 +262,8 @@ JSON
 
 @test "read lists each vault's items once per run" {
     seed_op_item v-staging Keys.staging.swift k Keys/Keys.staging.swift > /dev/null
+    seed_op_item v-staging GoogleService-Info.plist s Staging/GoogleService-Info.plist > /dev/null
+    seed_op_item v-staging GoogleService-Info.plist p Production/GoogleService-Info.plist > /dev/null
 
     run bash "$CLI" read
     [ "$status" -eq 0 ]

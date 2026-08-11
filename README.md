@@ -77,8 +77,8 @@ app-secrets --help        # full help
 - `read` fetches each configured file's document (matched by title and the
   `path` field, then fetched by item id) from its vault into that file's path,
   creating folders as needed. Pattern entries download every document whose
-  stored path matches. Vaults you can't access are skipped rather than
-  failing the whole run.
+  stored path matches. A vault you can't access doesn't abort the other
+  vaults, but it does fail the run.
 - `write` uploads each configured file that exists locally (create if the
   document is absent, edit if present). Pattern entries expand against the
   local tree first. Missing local files are skipped. It previews the upload
@@ -86,6 +86,26 @@ app-secrets --help        # full help
   without prompting.
 - Both accept an optional vault argument (vault name or friendly label) to scope
   the operation to a single vault.
+
+### Exit codes
+
+`read` and `write` keep going after a problem so one bad entry doesn't hide the
+rest, then report it in the exit status. **CI can rely on `$?`**: a green step
+means every configured file is in sync.
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Everything configured was synced. |
+| `1` | The run finished but something is out of sync, or it couldn't start (missing tooling, no session, bad config, unknown vault argument). |
+
+Failing the run: a document that can't be fetched, uploaded, resolved (duplicate
+items), or listed; a configured file with no document in the vault; a vault you
+can't access; a stored path rejected by the safety gate; an upload whose `path`
+field couldn't be stamped.
+
+Not failing the run: a pattern that matches nothing (on either side — patterns
+describe "whatever is there"), and a configured file that doesn't exist locally
+when you `write`.
 
 ## Configuration
 

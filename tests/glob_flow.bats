@@ -122,7 +122,7 @@ JSON
     seed_op_item v-staging ok.txt ok Sub/ok.txt > /dev/null
 
     run bash "$CLI" read
-    [ "$status" -eq 0 ]
+    [ "$status" -ne 0 ]
     [[ "$output" == *"Refusing unsafe path"* ]]
     [ ! -f ../evil.txt ]
     [ ! -f /etc/evil-abs.txt ]
@@ -149,6 +149,7 @@ JSON
     seed_op_item v-staging ok.txt ok Sub/ok.txt > /dev/null
 
     run bash "$CLI" read
+    [ "$status" -ne 0 ]
     [[ "$output" == *"Refusing unsafe path"* ]]
     [ "$(cat .git/hooks/post-checkout)" = '#!/bin/sh' ]
     [ ! -f .github/workflows/ci.yml ]
@@ -176,7 +177,7 @@ JSON
 
 @test "read skips patterns for a vault it cannot list" {
     OP_FAKE_FAIL_ITEM_LIST=1 run bash "$CLI" read
-    [ "$status" -eq 0 ]
+    [ "$status" -ne 0 ]
     [[ "$output" == *"Could not list documents in 'v-staging'"* ]]
     [[ "$output" != *"Pattern matched no documents"* ]]
 }
