@@ -80,8 +80,16 @@ expand_glob_local() {
 # filesystem write destinations on read, so anything that could escape the
 # repo (absolute, '~', '.' or '..' components) or read as a flag by tools
 # like dirname/mkdir (leading '-') is rejected.
+#
+# Staying inside the repo is not enough on its own: a few in-repo destinations
+# are as good as arbitrary code execution or control of the next run, so their
+# names are refused at any depth (submodules have their own .git). A broad
+# pattern like '**' must not let a hostile or compromised vault item land on
+# one of them.
+_UNSAFE_PATH_COMPONENTS=".git .github .gitmodules .gitattributes"
+
 is_safe_rel_path() {
-    local p="$1"
+    local p="$1" comp rest bad
     [[ -n "$p" ]] || return 1
     case "$p" in
         /*|"~"*|-*) return 1 ;;
@@ -89,5 +97,17 @@ is_safe_rel_path() {
     case "/$p/" in
         */../*|*/./*) return 1 ;;
     esac
+    rest="$p"
+    while [[ -n "$rest" ]]; do
+        comp="${rest%%/*}"
+        if [[ "$comp" == "${CONFIG_FILE_NAME:-.secrets.config.json}" ]]; then
+            return 1
+        fi
+        for bad in $_UNSAFE_PATH_COMPONENTS; do
+            [[ "$comp" == "$bad" ]] && return 1
+        done
+        [[ "$rest" == */* ]] || break
+        rest="${rest#*/}"
+    done
     return 0
 }
