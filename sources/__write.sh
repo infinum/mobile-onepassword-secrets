@@ -216,6 +216,35 @@ __write() {
         esac
     done
 
+    # Moving a file leaves the old item behind: write creates a fresh one at
+    # the new path while the old keeps its stamp, so a folder pattern would
+    # keep restoring the file at its old location on every read. Point at the
+    # leftover — deleting items in 1Password is the user's call, not ours.
+    # Paths listed literally in the config are left alone: their absence is
+    # already reported above as a missing local file.
+    local stale_title stale_path idx literal items
+    for vault in "${needed[@]+"${needed[@]}"}"; do
+        items=$(get_vault_items "$vault")
+        [[ "$items" == "FAILED" ]] && continue
+        while IFS=$'\t' read -r stale_title stale_path; do
+            [[ -n "$stale_path" ]] || continue
+            [[ -e "$stale_path" ]] && continue
+            literal=false
+            for e in "${file_vaults[@]+"${file_vaults[@]}"}"; do
+                [[ "$e" == "$stale_path:$vault" ]] && { literal=true; break; }
+            done
+            [[ "$literal" == true ]] && continue
+            for idx in "${!up_files[@]}"; do
+                [[ "${up_vaults[$idx]}" == "$vault" ]] || continue
+                [[ "${up_files[$idx]}" != "$stale_path" ]] || continue
+                [[ "$(doc_title_for "${up_files[$idx]}")" == "$stale_title" ]] || continue
+                echo "[!] '$vault' still has a document stamped '$stale_path', but there is no local file there — ${up_files[$idx]} looks like where it moved. Delete the old item in 1Password, or read will keep restoring it."
+                break
+            done
+        done < <(printf '%s' "$items" | jq -r '.[] | . as $it | (.fields // [])[]
+            | select(.label == "path") | [$it.title, .value] | @tsv')
+    done
+
     echo
     if [[ "$failed" -ne 0 ]]; then
         echo "Done, with errors — some files were not uploaded."

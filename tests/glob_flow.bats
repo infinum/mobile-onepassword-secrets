@@ -191,6 +191,44 @@ JSON
     [[ "$output" == *"Pattern matched no documents in 'v-staging': Certs/"* ]]
 }
 
+@test "write points out the leftover item after a file moves" {
+    cat > .secrets.config.json <<'JSON'
+{
+  "vaults": [
+    { "vault": "v-staging", "files": ["Vault/**"] }
+  ]
+}
+JSON
+    mkdir -p Vault/Old
+    echo k > Vault/Old/K.swift
+    run bash "$CLI" write
+    [ "$status" -eq 0 ]
+
+    mkdir -p Vault/New
+    mv Vault/Old/K.swift Vault/New/K.swift
+
+    run bash "$CLI" write
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Vault/Old/K.swift"* ]]
+    [[ "$output" == *"no local file"* ]]
+    # The new location still uploads; this is a heads-up, not a blocker.
+    grep -q "document create Vault/New/K.swift" "$OP_LOG"
+}
+
+@test "write says nothing about leftovers when files stay put" {
+    mkdir -p Keys Vault Certs
+    echo k > Keys/Keys.staging.swift
+    echo a > Vault/a.plist
+    echo c > Certs/c.pem
+
+    run bash "$CLI" write
+    [ "$status" -eq 0 ]
+
+    run bash "$CLI" write
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"no local file"* ]]
+}
+
 @test "read refuses to pick a winner between duplicate stamped paths" {
     cat > .secrets.config.json <<'JSON'
 {
