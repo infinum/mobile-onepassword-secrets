@@ -1,7 +1,69 @@
-# Prompt: migrate a project from HashiCorp Vault scripts to infinum-secrets
+# Migrating from Vault to 1Password
 
-Paste everything below this line into an agent (Claude Code or similar) opened at
-the project you want to migrate.
+The legacy [HashiCorp Vault](https://www.vaultproject.io) workflow (a `.vault/`
+folder with `read.sh`/`write.sh` calling `vault.infinum.co`) is deprecated in
+favor of 1Password + [`infinum-secrets`](../README.md). New projects should
+follow [Project setup](project-setup.md) from day one; this guide moves an
+existing project over.
+
+**The migration is owned by one person** — the project lead or a senior
+engineer. They request the vaults, get **Manage** access, add the team, and
+request the CI service account. Don't have multiple people pinging DevOps for
+the same project.
+
+## Checklist
+
+1. **Request the 1Password vaults** via `#devops-hotline` (see
+   [Project setup](project-setup.md#1-request-the-project-vaults) for naming
+   and access conventions), then add the rest of the team.
+
+2. **Pull the latest secrets one last time** with the legacy script:
+   `bash ./.vault/read.sh` (needs a working `VAULT_AUTH_TOKEN`). The local
+   files become the source of truth for the upload.
+
+3. **Split any `*.shared.*` files.** A `Keys.shared.swift` with
+   `#if DEVELOPMENT / #elseif STAGING` branching doesn't fit the per-vault
+   split — break it into per-environment files (`Keys.staging.swift`,
+   `Keys.production.swift`) and update Xcode target membership / Build
+   Settings.
+
+4. **Install the CLI and create the config**: `infinum-secrets init` in the
+   project root, then map each environment's files to its vault in
+   `.secrets.config.json`. With per-environment folders, folder shorthand
+   (`Configurations/Staging/`) or suffix patterns (`Vault/**/*.staging.*`)
+   keep the config short — see the
+   [README's typical setups](../README.md#typical-setups).
+   Validate with `infinum-secrets doctor`: it must show a signed-in session
+   and ✓ read/write access on every configured vault before you continue.
+
+5. **Upload with `infinum-secrets write`.** Review the preview line by line —
+   every expected file, each targeting the right vault, nothing extra.
+
+6. **Verify the round-trip**: move the local secret files aside, run
+   `infinum-secrets read`, and compare the restored files against the copies
+   (`diff -rq`). Contents must be identical.
+
+7. **Switch CI to 1Password.** Replace the Vault read step with the two
+   script steps from [Project setup](project-setup.md#7-ci-bitrise) and add
+   the `OP_SERVICE_ACCOUNT_TOKEN` secret.
+
+   > **No dual Vault / 1Password support on CI.** The 1Password steps replace
+   > the Vault steps outright — don't add branch-detection logic that keeps
+   > both alive. If an older release branch needs CI builds after the switch,
+   > **cherry-pick the migration commits onto that branch** so it has
+   > 1Password support.
+
+8. **Delete the `.vault/` folder** and remove remaining references to it,
+   `VAULT_AUTH_TOKEN`, or `VAULT_ADDR` from CI configs, fastlane, and the
+   project README. The gitignored local `Vault/` directory (the one holding
+   the actual secret files) keeps its name and `.gitignore` rule.
+
+## Agent-assisted migration
+
+Steps 2–8 are mechanical enough to delegate. Paste everything below the line
+into an agent (e.g. Claude Code) opened at the project you want to migrate —
+it discovers the legacy scripts, generates the config, and walks the upload
+and verification with you.
 
 ---
 
@@ -126,9 +188,11 @@ agreed vault, nothing extra.
 
 - Delete the legacy vault scripts.
 - Grep CI configs, fastlane, Makefiles, and READMEs for references to them,
-  `VAULT_AUTH_TOKEN`, or `VAULT_ADDR`; propose replacements
-  (`OP_SERVICE_ACCOUNT_TOKEN` for CI — see the tool README's Authentication
-  section).
+  `VAULT_AUTH_TOKEN`, or `VAULT_ADDR`; replace the Vault CI read step with
+  the 1Password steps (`OP_SERVICE_ACCOUNT_TOKEN` — see the tool README's
+  Authentication section and docs/project-setup.md). Do **not** add dual
+  Vault/1Password branch-detection to CI: older branches that need builds
+  cherry-pick the migration commits instead.
 - Verify `.gitignore` still covers all secret paths.
 - Add a short note to the project README: how to install `infinum-secrets`
   and that `read`/`write` replace the old scripts.

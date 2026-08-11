@@ -27,6 +27,10 @@ The installer picks a writable directory on your `PATH` (defaulting to
 `/usr/local/bin`) and drops the `app-secrets` entry point there. Update later
 with `app-secrets --update`.
 
+Setting up a new project end to end (vaults, team access, CI) is covered in
+[docs/project-setup.md](docs/project-setup.md); moving an existing project off
+the legacy Vault workflow in [docs/migrate-from-vault.md](docs/migrate-from-vault.md).
+
 ## Usage
 
 ```bash
