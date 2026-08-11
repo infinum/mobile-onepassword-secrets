@@ -1,8 +1,8 @@
 # tests/helpers/common.bash — shared setup for suites exercising the fake op.
 
-# Asserts that a command fails. Use this instead of a bare `! cmd`: bash exempts
-# !-inverted commands from `set -e`, so `! cmd` silently passes anywhere but the
-# last line of a test.
+# Asserts that a command fails. Use this instead of a bare "! cmd": bash exempts
+# a command whose status is inverted from `set -e`, so "! cmd" silently passes
+# anywhere but the last line of a test.
 refute() {
     if "$@"; then
         echo "expected to fail but succeeded: $*" >&2

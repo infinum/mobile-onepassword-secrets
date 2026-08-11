@@ -213,7 +213,7 @@ Besides literal paths, `files` entries can be patterns:
 |---------|---------|
 | `*` | Any characters within one path component (never crosses `/`). |
 | `?` | One character within a component. |
-| `**` | Any characters across directories; `**/` matches zero or more whole directories. |
+| `**` | As a whole path component, any characters across directories; `**/` matches zero or more whole directories. |
 | `dir/` | Trailing slash is folder shorthand for `dir/**` — everything under `dir`, recursively. |
 
 ```json
@@ -237,10 +237,19 @@ on the vault's documents, and every hit is downloaded to its stamped path —
 documents without the field are invisible to patterns, so run `write` once
 before relying on pattern `read`. When a literal entry and a pattern overlap,
 the file syncs once. Regex metacharacters in patterns are treated literally,
-and stored paths that would escape the repo (absolute, `..`, leading `-`) are
-refused on `read`. Note that `**` crosses directories wherever it appears —
-`a**b` matches `a/x/b` — unlike gitignore, where a non-boundary `**` degrades
-to `*`.
+and `**` is only directory-crossing as a component of its own — inside a
+component (`a**b`) it behaves as two ordinary stars, like gitignore.
+
+A pattern hands the vault control over where files land, so `read` refuses any
+stored path that could escape the repo (absolute, `~`, `..`, leading `-`) or
+take over the next run: `.git`, `.github`, `.gitmodules`, `.gitattributes` and
+`.secrets.config.json` are never written, at any depth. Two documents stamped
+with the same path are skipped rather than raced.
+
+**Moving a file** leaves its old document behind: `write` creates a new one at
+the new path, and the old stamp keeps matching your pattern, so `read` would
+restore the file at its old location indefinitely. `write` points at the
+leftover when it spots one — delete that item in 1Password.
 
 #### Typical setups
 
