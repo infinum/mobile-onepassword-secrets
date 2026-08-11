@@ -191,6 +191,21 @@ JSON
     [[ "$output" == *"Pattern matched no documents in 'v-staging': Certs/"* ]]
 }
 
+@test "read lists a pattern-only vault once per run" {
+    cat > .secrets.config.json <<'JSON'
+{
+  "vaults": [
+    { "vault": "v-staging", "files": ["Vault/**", "Certs/", "Keys/"] }
+  ]
+}
+JSON
+    seed_op_item v-staging a.plist doc-a Vault/a.plist > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "item list --vault v-staging" "$OP_LOG")" -eq 1 ]
+}
+
 @test "read <label> skips patterns for other vaults" {
     cat > secrets.config.json <<'JSON'
 {

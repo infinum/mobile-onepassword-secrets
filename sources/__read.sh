@@ -129,6 +129,12 @@ __read() {
         fi
 
         regex=$(glob_to_regex "$(normalize_pattern "$pat")")
+        # Warm the cache in this shell first. Both reads below happen in
+        # subshells, which inherit the cache but cannot fill it: without this
+        # a pattern-only vault is listed afresh for every pattern, and a
+        # transient failure between the two could feed the FAILED sentinel
+        # straight into jq.
+        get_vault_items "$vault" > /dev/null
         if [[ "$(get_vault_items "$vault")" == "FAILED" ]]; then
             echo "[!] Could not list documents in '$vault', skipping pattern $pat"
             failed=1
