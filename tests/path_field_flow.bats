@@ -211,6 +211,23 @@ JSON
     refute grep -q "document edit $id Production/GoogleService-Info.plist" "$OP_LOG"
 }
 
+@test "read downloads a duplicated literal entry once, without reporting it missing" {
+    cat > .secrets.config.json <<'JSON'
+{
+  "vaults": [
+    { "vault": "v-staging",
+      "files": ["Keys/Keys.staging.swift", "Keys/Keys.staging.swift"] }
+  ]
+}
+JSON
+    seed_op_item v-staging Keys.staging.swift keys Keys/Keys.staging.swift > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [ "$(grep -c "document get" "$OP_LOG")" -eq 1 ]
+    [[ "$output" != *"No document in"* ]]
+}
+
 @test "write uploads a duplicated literal entry only once" {
     cat > secrets.config.json <<'JSON'
 {

@@ -120,13 +120,13 @@ __write() {
     fi
 
     # Write-access check for the vaults actually needed.
-    for vault in "${needed[@]}"; do
+    for vault in "${needed[@]+"${needed[@]}"}"; do
         detect_vault_access can_write_vault "write" "$vault"
     done
 
     # Warm the per-vault item cache in this shell: resolution below runs in
     # command substitutions (subshells), which inherit but can't fill it.
-    for vault in "${needed[@]}"; do
+    for vault in "${needed[@]+"${needed[@]}"}"; do
         get_vault_items "$vault" > /dev/null
     done
 

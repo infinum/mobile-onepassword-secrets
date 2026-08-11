@@ -49,6 +49,13 @@ setup() {
     refute path_matches_pattern 'Vault' 'Vault/**'
 }
 
+@test "double star is only special as a whole component" {
+    # 'a**b' is two stars in one component, not a directory-crossing '**'.
+    path_matches_pattern 'Keys/axyzb.swift' 'Keys/a**b.swift'
+    refute path_matches_pattern 'Keys/a/x/b.swift' 'Keys/a**b.swift'
+    refute path_matches_pattern 'Vault/x/y.plist' 'Vault/x**.plist'
+}
+
 @test "folder shorthand matches everything under the folder" {
     path_matches_pattern 'Vault/Keys/a.swift' 'Vault/Keys/'
     path_matches_pattern 'Vault/Keys/x/y.swift' 'Vault/Keys/'

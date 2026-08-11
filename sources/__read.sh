@@ -61,7 +61,7 @@ __read() {
     # Anything that leaves a configured file out of sync flips this; the run
     # ends non-zero so CI cannot mistake a half-empty checkout for a good one.
     local failed=0
-    local entry rel vault title verdict action id claimed=""
+    local entry rel vault title verdict action id claimed="" done_entries=""
     for entry in "${file_vaults[@]+"${file_vaults[@]}"}"; do
         rel="${entry%:*}"
         vault="${entry##*:}"
@@ -69,6 +69,12 @@ __read() {
         if [[ -n "$vault_filter" && "$vault" != "$vault_filter" ]]; then
             continue
         fi
+        # A path listed twice for the same vault is one file: without this the
+        # second pass finds its item already claimed and calls it missing.
+        if list_contains_line "$entry" "$done_entries"; then
+            continue
+        fi
+        done_entries="${done_entries:+$done_entries$'\n'}$entry"
         if ! can_access_vault "$vault"; then
             echo "[!] No access to '$vault', skipping $rel"
             failed=1

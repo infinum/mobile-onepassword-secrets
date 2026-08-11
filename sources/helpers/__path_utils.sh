@@ -33,7 +33,11 @@ glob_to_regex() {
     while [[ "$i" -lt "${#pat}" ]]; do
         c="${pat:$i:1}"
         if [[ "$c" == '*' ]]; then
-            if [[ "${pat:$i:2}" == '**' ]]; then
+            # '**' crosses directories only as a component of its own; inside
+            # one ('a**b') it is just two ordinary stars.
+            if [[ "${pat:$i:2}" == '**' ]] \
+               && { [[ "$i" -eq 0 ]] || [[ "${pat:$((i - 1)):1}" == '/' ]]; } \
+               && { [[ $((i + 2)) -eq "${#pat}" ]] || [[ "${pat:$((i + 2)):1}" == '/' ]]; }; then
                 if [[ "${pat:$((i + 2)):1}" == '/' ]]; then
                     out="${out}([^/]+/)*"   # '**/': zero or more whole dirs
                     i=$((i + 3))
