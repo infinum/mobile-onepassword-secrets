@@ -65,7 +65,7 @@ seed_configured_docs() {
 
     [ -f "$WORKDIR/Keys/Keys.production.swift" ]
     [ ! -f "$WORKDIR/Keys/Keys.staging.swift" ]
-    ! grep -q -- "--out-file Keys/Keys.staging.swift" "$OP_LOG"
+    refute grep -q -- "--out-file Keys/Keys.staging.swift" "$OP_LOG"
 }
 
 @test "write uploads existing files titled by filename (no folder)" {
@@ -80,7 +80,7 @@ seed_configured_docs() {
     grep -q "document create Keys/Keys.staging.swift --title Keys.staging.swift --vault v-staging" "$OP_LOG"
     grep -q "document create Config/Config.dev.json --title Config.dev.json --vault v-staging" "$OP_LOG"
     grep -q "document create Keys/Keys.production.swift --title Keys.production.swift --vault v-prod" "$OP_LOG"
-    ! grep -q -- "--title Keys/" "$OP_LOG"
+    refute grep -q -- "--title Keys/" "$OP_LOG"
 }
 
 @test "write <label> restricts to that vault" {
@@ -92,14 +92,14 @@ seed_configured_docs() {
     [ "$status" -eq 0 ]
 
     grep -q "document create Keys/Keys.staging.swift --title Keys.staging.swift --vault v-staging" "$OP_LOG"
-    ! grep -q "Keys.production.swift" "$OP_LOG"
+    refute grep -q "Keys.production.swift" "$OP_LOG"
 }
 
 @test "write errors when no configured files exist locally" {
     run bash "$CLI" write
     [ "$status" -ne 0 ]
     [[ "$output" == *"No local files to upload"* ]]
-    ! grep -q "document create" "$OP_LOG"
+    refute grep -q "document create" "$OP_LOG"
 }
 
 @test "read establishes an op session before checking vault access" {
@@ -121,7 +121,7 @@ seed_configured_docs() {
     OP_FAKE_FAIL_WHOAMI=1 OP_FAKE_FAIL_VAULT_LIST=1 run bash "$CLI" read
     [ "$status" -ne 0 ]
     [[ "$output" == *"not signed in to 1Password"* ]]
-    ! grep -q "document get" "$OP_LOG"
+    refute grep -q "document get" "$OP_LOG"
     [[ "$output" != *"✗"* ]]
 }
 
@@ -132,5 +132,5 @@ seed_configured_docs() {
     OP_FAKE_FAIL_WHOAMI=1 OP_FAKE_FAIL_VAULT_LIST=1 run bash "$CLI" write
     [ "$status" -ne 0 ]
     [[ "$output" == *"not signed in to 1Password"* ]]
-    ! grep -q "document create" "$OP_LOG"
+    refute grep -q "document create" "$OP_LOG"
 }

@@ -51,7 +51,7 @@ teardown() {
     grep -q "document create Vault/sub/b.plist --title b.plist --vault v-staging" "$OP_LOG"
     grep -q "document create Certs/my cert.pem --title my cert.pem --vault v-staging" "$OP_LOG"
     grep -q "document create Certs/deep/d.pem --title d.pem --vault v-staging" "$OP_LOG"
-    ! grep -q "notes.txt" "$OP_LOG"
+    refute grep -q "notes.txt" "$OP_LOG"
 
     grep -q "path\[text\]=Vault/sub/b.plist --vault v-staging" "$OP_LOG"
     grep -q "path\[text\]=Certs/my cert.pem --vault v-staging" "$OP_LOG"
@@ -104,8 +104,8 @@ JSON
     [ ! -f Other/x.plist ]
     grep -q "document get $ida --vault v-staging --out-file Vault/a.plist --force" "$OP_LOG"
     grep -q "document get $idb --vault v-staging --out-file Vault/sub/b.plist --force" "$OP_LOG"
-    ! grep -q "document get $idother" "$OP_LOG"
-    ! grep -q "document get $idunstamped" "$OP_LOG"
+    refute grep -q "document get $idother" "$OP_LOG"
+    refute grep -q "document get $idunstamped" "$OP_LOG"
 }
 
 @test "read refuses unsafe stored paths" {
@@ -128,9 +128,35 @@ JSON
     [ ! -f /etc/evil-abs.txt ]
     [ ! -e ./-p ]
     [ "$(cat Sub/ok.txt)" = "ok" ]
-    ! grep -q "document get $idevil" "$OP_LOG"
-    ! grep -q "document get $idabs" "$OP_LOG"
-    ! grep -q "document get $iddash" "$OP_LOG"
+    refute grep -q "document get $idevil" "$OP_LOG"
+    refute grep -q "document get $idabs" "$OP_LOG"
+    refute grep -q "document get $iddash" "$OP_LOG"
+}
+
+@test "read refuses stored paths that would hijack the next run" {
+    cat > .secrets.config.json <<'JSON'
+{
+  "vaults": [
+    { "vault": "v-staging", "files": ["**"] }
+  ]
+}
+JSON
+    mkdir -p .git/hooks
+    echo '#!/bin/sh' > .git/hooks/post-checkout
+    idhook=$(seed_op_item v-staging post-checkout 'pwned' .git/hooks/post-checkout)
+    idconf=$(seed_op_item v-staging .secrets.config.json 'pwned' .secrets.config.json)
+    idci=$(seed_op_item v-staging ci.yml 'pwned' .github/workflows/ci.yml)
+    seed_op_item v-staging ok.txt ok Sub/ok.txt > /dev/null
+
+    run bash "$CLI" read
+    [[ "$output" == *"Refusing unsafe path"* ]]
+    [ "$(cat .git/hooks/post-checkout)" = '#!/bin/sh' ]
+    [ ! -f .github/workflows/ci.yml ]
+    grep -q '"vaults"' .secrets.config.json
+    [ "$(cat Sub/ok.txt)" = "ok" ]
+    refute grep -q "document get $idhook" "$OP_LOG"
+    refute grep -q "document get $idconf" "$OP_LOG"
+    refute grep -q "document get $idci" "$OP_LOG"
 }
 
 @test "read fetches a document once when explicit and glob entries overlap" {
@@ -179,8 +205,8 @@ JSON
     run bash "$CLI" read staging
     [ "$status" -eq 0 ]
     [ ! -f Prod/p.pem ]
-    ! grep -q "document get $idprod" "$OP_LOG"
-    ! grep -q "item list --vault v-prod" "$OP_LOG"
+    refute grep -q "document get $idprod" "$OP_LOG"
+    refute grep -q "item list --vault v-prod" "$OP_LOG"
 }
 
 @test "write <label> skips patterns for other vaults" {
@@ -198,5 +224,5 @@ JSON
 
     run bash "$CLI" write staging
     [ "$status" -eq 0 ]
-    ! grep -q "Prod/p.pem" "$OP_LOG"
+    refute grep -q "Prod/p.pem" "$OP_LOG"
 }

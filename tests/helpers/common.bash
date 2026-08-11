@@ -1,5 +1,16 @@
 # tests/helpers/common.bash — shared setup for suites exercising the fake op.
 
+# Asserts that a command fails. Use this instead of a bare `! cmd`: bash exempts
+# !-inverted commands from `set -e`, so `! cmd` silently passes anywhere but the
+# last line of a test.
+refute() {
+    if "$@"; then
+        echo "expected to fail but succeeded: $*" >&2
+        return 1
+    fi
+    return 0
+}
+
 # Installs the stateful fake `op` shim on PATH and initializes its state/log.
 # Usage (from setup()): setup_fake_op "$WORKDIR"
 # Exports: OP_LOG, OP_STATE; prepends the shim dir to PATH.

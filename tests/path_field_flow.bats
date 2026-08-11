@@ -84,7 +84,7 @@ seed_local_duplicates() {
 
     grep -q "document edit $id Keys/Keys.staging.swift --vault v-staging" "$OP_LOG"
     grep -q "item edit $id path\[text\]=Keys/Keys.staging.swift --vault v-staging" "$OP_LOG"
-    ! grep -q "document create" "$OP_LOG"
+    refute grep -q "document create" "$OP_LOG"
     [ "$(cat "$OP_STATE/items/$id/content")" = "new-content" ]
 }
 
@@ -97,8 +97,8 @@ seed_local_duplicates() {
     run bash "$CLI" write
     [ "$status" -eq 0 ]
     [[ "$output" == *"Cannot uniquely resolve document 'GoogleService-Info.plist'"* ]]
-    ! grep -q "document create" "$OP_LOG"
-    ! grep -q "document edit" "$OP_LOG"
+    refute grep -q "document create" "$OP_LOG"
+    refute grep -q "document edit" "$OP_LOG"
 }
 
 @test "write warns when the new item id is unparseable, then the next write adopts" {
@@ -108,7 +108,7 @@ seed_local_duplicates() {
     OP_FAKE_BROKEN_CREATE=1 run bash "$CLI" write
     [ "$status" -eq 0 ]
     [[ "$output" == *"could not read the new item id"* ]]
-    ! grep -q "item edit" "$OP_LOG"
+    refute grep -q "item edit" "$OP_LOG"
 
     run bash "$CLI" write
     [ "$status" -eq 0 ]
@@ -146,7 +146,7 @@ seed_local_duplicates() {
     run bash "$CLI" read
     [ "$status" -eq 0 ]
     [ "$(cat Keys/Keys.staging.swift)" = "keys-doc" ]
-    ! grep -q "item edit" "$OP_LOG"
+    refute grep -q "item edit" "$OP_LOG"
 }
 
 @test "read reports missing documents and continues" {
@@ -205,7 +205,7 @@ JSON
     OP_FAKE_FAIL_ITEM_LIST=1 run bash "$CLI" write
     [ "$status" -eq 0 ]
     [[ "$output" == *"Could not list documents in 'v-staging'"* ]]
-    ! grep -q "document create" "$OP_LOG"
+    refute grep -q "document create" "$OP_LOG"
 }
 
 @test "read skips a vault it cannot list instead of reporting missing" {
@@ -215,7 +215,7 @@ JSON
     [ "$status" -eq 0 ]
     [[ "$output" == *"Could not list documents in 'v-staging'"* ]]
     [[ "$output" != *"No document in"* ]]
-    ! grep -q "document get" "$OP_LOG"
+    refute grep -q "document get" "$OP_LOG"
 }
 
 @test "write scopes item listing to document items" {

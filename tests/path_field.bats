@@ -44,7 +44,7 @@ teardown() {
     run get_vault_items v-staging
     [ "$status" -eq 0 ]
     [ "$output" = "[]" ]
-    ! grep -q "item get -" "$OP_LOG"
+    refute grep -q "item get -" "$OP_LOG"
 }
 
 @test "resolve reports none in an empty vault" {

@@ -2,6 +2,8 @@
 # Unit tests for glob/folder pattern helpers: entry classification, glob→regex
 # translation, matching, local expansion, and the remote-path safety gate.
 
+load helpers/common
+
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
     source "$REPO_ROOT/sources/helpers/__path_utils.sh"
@@ -14,8 +16,8 @@ setup() {
     is_glob_entry '*.json'
     is_glob_entry 'Keys/K?.swift'
     is_glob_entry 'Vault/Keys/'
-    ! is_glob_entry 'Keys/Keys.staging.swift'
-    ! is_glob_entry 'secrets.properties'
+    refute is_glob_entry 'Keys/Keys.staging.swift'
+    refute is_glob_entry 'secrets.properties'
 }
 
 # --- normalize_pattern -------------------------------------------------------
@@ -30,32 +32,32 @@ setup() {
 
 @test "star and question mark do not cross slashes" {
     path_matches_pattern 'a.json' '*.json'
-    ! path_matches_pattern 'd/a.json' '*.json'
+    refute path_matches_pattern 'd/a.json' '*.json'
     path_matches_pattern 'Keys/a.swift' 'Keys/*.swift'
-    ! path_matches_pattern 'Keys/sub/a.swift' 'Keys/*.swift'
+    refute path_matches_pattern 'Keys/sub/a.swift' 'Keys/*.swift'
     path_matches_pattern 'Keys/K1.swift' 'Keys/K?.swift'
-    ! path_matches_pattern 'Keys/K12.swift' 'Keys/K?.swift'
-    ! path_matches_pattern 'Keys/K/.swift' 'Keys/K?.swift'
+    refute path_matches_pattern 'Keys/K12.swift' 'Keys/K?.swift'
+    refute path_matches_pattern 'Keys/K/.swift' 'Keys/K?.swift'
 }
 
 @test "double star crosses directories, including zero of them" {
     path_matches_pattern 'Vault/a.plist' 'Vault/**/*.plist'
     path_matches_pattern 'Vault/x/y/a.plist' 'Vault/**/*.plist'
-    ! path_matches_pattern 'Other/a.plist' 'Vault/**/*.plist'
+    refute path_matches_pattern 'Other/a.plist' 'Vault/**/*.plist'
     path_matches_pattern 'Vault/deep/nested/f.txt' 'Vault/**'
     path_matches_pattern 'Vault/f.txt' 'Vault/**'
-    ! path_matches_pattern 'Vault' 'Vault/**'
+    refute path_matches_pattern 'Vault' 'Vault/**'
 }
 
 @test "folder shorthand matches everything under the folder" {
     path_matches_pattern 'Vault/Keys/a.swift' 'Vault/Keys/'
     path_matches_pattern 'Vault/Keys/x/y.swift' 'Vault/Keys/'
-    ! path_matches_pattern 'Vault/Other/a.swift' 'Vault/Keys/'
+    refute path_matches_pattern 'Vault/Other/a.swift' 'Vault/Keys/'
 }
 
 @test "regex metacharacters in patterns stay literal" {
     path_matches_pattern 'App.(dev)+[1].json' 'App.(dev)+[1].json'
-    ! path_matches_pattern 'Appx(dev)+[1]xjson' 'App.(dev)+[1].json'
+    refute path_matches_pattern 'Appx(dev)+[1]xjson' 'App.(dev)+[1].json'
     path_matches_pattern 'My Keys/K 1.swift' 'My Keys/*.swift'
 }
 
@@ -94,20 +96,36 @@ Vault/Keys/sub/c.swift" ]
 # --- is_safe_rel_path --------------------------------------------------------
 
 @test "is_safe_rel_path rejects traversal and absolute paths" {
-    ! is_safe_rel_path '/etc/passwd'
-    ! is_safe_rel_path '~/x'
-    ! is_safe_rel_path '../evil.txt'
-    ! is_safe_rel_path 'a/../b'
-    ! is_safe_rel_path 'a/..'
-    ! is_safe_rel_path 'a/./b'
-    ! is_safe_rel_path ''
+    refute is_safe_rel_path '/etc/passwd'
+    refute is_safe_rel_path '~/x'
+    refute is_safe_rel_path '../evil.txt'
+    refute is_safe_rel_path 'a/../b'
+    refute is_safe_rel_path 'a/..'
+    refute is_safe_rel_path 'a/./b'
+    refute is_safe_rel_path ''
 }
 
 @test "is_safe_rel_path rejects a leading dash" {
-    ! is_safe_rel_path '-p/evil.txt'
-    ! is_safe_rel_path '--force'
+    refute is_safe_rel_path '-p/evil.txt'
+    refute is_safe_rel_path '--force'
     is_safe_rel_path 'a/-b/c.txt'
     is_safe_rel_path 'a-b.txt'
+}
+
+@test "is_safe_rel_path rejects git-internal destinations" {
+    refute is_safe_rel_path '.git/hooks/post-checkout'
+    refute is_safe_rel_path '.git/config'
+    refute is_safe_rel_path 'Sub/.git/hooks/pre-commit'
+    refute is_safe_rel_path '.github/workflows/ci.yml'
+    refute is_safe_rel_path '.gitattributes'
+    is_safe_rel_path 'git/notes.txt'
+    is_safe_rel_path 'Keys/.gitkeep-secret.json'
+}
+
+@test "is_safe_rel_path rejects the tool's own config file" {
+    refute is_safe_rel_path '.secrets.config.json'
+    refute is_safe_rel_path 'Sub/.secrets.config.json'
+    is_safe_rel_path 'secrets.config.json'
 }
 
 @test "is_safe_rel_path accepts ordinary repo paths" {
