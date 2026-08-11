@@ -64,6 +64,13 @@ ensure_op_session() {
     if op whoami >/dev/null 2>&1; then
         return 0
     fi
+    # `op whoami` only reports an already-established session — it does not
+    # itself trigger the desktop-app authorization, so with the app
+    # integration it can fail while real commands authorize fine. Establish
+    # the session with a real read-only call (may prompt and wait).
+    if op vault list >/dev/null 2>&1; then
+        return 0
+    fi
     echo "Error: not signed in to 1Password. Unlock the 1Password app (or run 'op signin'), then retry." >&2
     return 1
 }

@@ -31,6 +31,7 @@ if [ "$1" = whoami ]; then
     [ "${OP_FAKE_FAIL_WHOAMI:-}" = 1 ] && exit 1
     echo '{"user_uuid":"u1"}'
 elif [ "$1" = vault ] && [ "$2" = list ]; then
+    [ "${OP_FAKE_FAIL_VAULT_LIST:-}" = 1 ] && exit 1
     echo '[{"name":"v-staging"},{"name":"v-prod"}]'
 elif [ "$1" = vault ] && [ "$2" = user ] && [ "$3" = list ]; then
     echo '[{"id":"user-1","permissions":["allow_viewing","allow_editing"]}]'
@@ -134,11 +135,20 @@ teardown() {
     [ "$(head -1 "$OP_LOG")" = "whoami" ]
 }
 
-@test "read fails fast with a sign-in hint when no op session is available" {
+@test "read proceeds when whoami fails but the app integration answers" {
+    # `op whoami` only reports an existing session — with the desktop-app
+    # integration it can fail while real commands (vault list) authorize fine.
     OP_FAKE_FAIL_WHOAMI=1 run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [ -f "$WORKDIR/Keys/Keys.staging.swift" ]
+    [[ "$output" != *"not signed in"* ]]
+}
+
+@test "read fails fast with a sign-in hint when no op session is available" {
+    OP_FAKE_FAIL_WHOAMI=1 OP_FAKE_FAIL_VAULT_LIST=1 run bash "$CLI" read
     [ "$status" -ne 0 ]
     [[ "$output" == *"not signed in to 1Password"* ]]
-    ! grep -q "vault list" "$OP_LOG"
+    ! grep -q "document get" "$OP_LOG"
     [[ "$output" != *"✗"* ]]
 }
 
@@ -146,9 +156,8 @@ teardown() {
     mkdir -p "$WORKDIR/Keys"
     echo v > "$WORKDIR/Keys/Keys.staging.swift"
 
-    OP_FAKE_FAIL_WHOAMI=1 run bash "$CLI" write
+    OP_FAKE_FAIL_WHOAMI=1 OP_FAKE_FAIL_VAULT_LIST=1 run bash "$CLI" write
     [ "$status" -ne 0 ]
     [[ "$output" == *"not signed in to 1Password"* ]]
-    ! grep -q "vault list" "$OP_LOG"
     ! grep -q "document create" "$OP_LOG"
 }

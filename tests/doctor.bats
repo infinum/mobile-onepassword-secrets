@@ -34,6 +34,33 @@ teardown() {
     [[ "$output" == *"valid JSON"* || "$output" == *"invalid"* ]]
 }
 
+@test "doctor detects a session via the app integration when whoami fails" {
+    # `op whoami` only reports an established session; with the desktop-app
+    # integration it can fail while real commands (vault list) authorize fine.
+    cat > "$WORKDIR/bin/op" <<'SHIM'
+#!/usr/bin/env bash
+if [ "$1" = whoami ]; then exit 1; fi
+if [ "$1" = vault ] && [ "$2" = list ]; then echo '[{"name":"v1"}]'; fi
+exit 0
+SHIM
+    chmod +x "$WORKDIR/bin/op"
+    run bash "$CLI" doctor
+    [[ "$output" == *"signed in (via 1Password app integration)"* ]]
+    [[ "$output" != *"not signed in"* ]]
+}
+
+@test "doctor reports not signed in when whoami and vault list both fail" {
+    cat > "$WORKDIR/bin/op" <<'SHIM'
+#!/usr/bin/env bash
+if [ "$1" = whoami ]; then exit 1; fi
+if [ "$1" = vault ] && [ "$2" = list ]; then exit 1; fi
+exit 0
+SHIM
+    chmod +x "$WORKDIR/bin/op"
+    run bash "$CLI" doctor
+    [[ "$output" == *"not signed in"* ]]
+}
+
 @test "doctor does not hang when op is unresponsive (bounded probe)" {
     # An op that hangs forever must not hang doctor: the bounded probe kills it.
     cat > "$WORKDIR/bin/op" <<'SHIM'

@@ -46,6 +46,11 @@ __doctor() {
         elif [[ "$rc" -eq 124 ]]; then
             echo "  $bad 1Password did not respond in time — unlock the 1Password app, then run 'op signin'"
             failures=$((failures + 1))
+        elif op_bounded 8 op vault list; then
+            # `op whoami` only reports an established session; real commands
+            # can still authorize through the desktop-app integration.
+            echo "  $ok signed in (via 1Password app integration)"
+            signed_in=true
         else
             echo "  $bad not signed in — run 'op signin' (or set OP_SERVICE_ACCOUNT_TOKEN)"
             failures=$((failures + 1))
