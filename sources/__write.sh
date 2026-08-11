@@ -165,6 +165,10 @@ __write() {
 
         case "$action" in
             found|adopt)
+                # Claim on resolution, not on success: a failed upload must not
+                # release the id, or the next file sharing this base name would
+                # adopt the same item and overwrite it with the wrong secret.
+                claimed="${claimed:+$claimed,}$id"
                 if ! op document edit "$id" "$file" --vault "$vault"; then
                     echo "[!] Could not upload $file to '$vault'"
                     continue
@@ -173,7 +177,6 @@ __write() {
                     stamp_item_path "$id" "$file" "$vault" \
                         || echo "[!] Uploaded, but could not set 'path' on document '$title' in '$vault'"
                 fi
-                claimed="${claimed:+$claimed,}$id"
                 echo "[+] $file → $vault (document '$title')"
                 ;;
             none)

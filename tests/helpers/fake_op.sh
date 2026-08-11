@@ -9,7 +9,11 @@
 #   $OP_STATE/items/<id>/content   document bytes
 # Env toggles: OP_FAKE_BROKEN_CREATE=1 makes `document create --format json`
 # print `{}` (no id) to exercise the caller's unparseable-id fallback;
-# OP_FAKE_FAIL_ITEM_LIST=1 makes `item list` fail (transient op outage).
+# OP_FAKE_FAIL_ITEM_LIST=1 makes `item list` fail (transient op outage);
+# OP_FAKE_FAIL_WHOAMI=1 makes `whoami` fail (no usable session);
+# OP_FAKE_FAIL_DOC=<id> makes `document get/edit` fail for that one item;
+# OP_FAKE_FAIL_DOC_ONCE=<id> fails only the first `document get/edit` for it,
+# so a caller that reuses the id afterwards is caught.
 
 printf '%s\n' "$*" >> "$OP_LOG"
 
@@ -24,6 +28,21 @@ flag_val() {
         [ "$prev" = "$want" ] && { printf '%s' "$a"; return 0; }
         prev="$a"
     done
+    return 1
+}
+
+# Returns 0 (= this call should fail) when the id is the configured victim:
+# always for OP_FAKE_FAIL_DOC, only on the first call for _ONCE.
+should_fail_doc() {
+    local id="$1"
+    if [ -n "${OP_FAKE_FAIL_DOC:-}" ] && [ "$id" = "$OP_FAKE_FAIL_DOC" ]; then
+        return 0
+    fi
+    if [ -n "${OP_FAKE_FAIL_DOC_ONCE:-}" ] && [ "$id" = "$OP_FAKE_FAIL_DOC_ONCE" ] \
+       && [ ! -f "$STATE/failed-once-$id" ]; then
+        : > "$STATE/failed-once-$id"
+        return 0
+    fi
     return 1
 }
 
@@ -158,6 +177,7 @@ fi
 if [ "$cmd" = document ] && [ "$sub" = edit ]; then
     arg="${3:-}"
     file="${4:-}"
+    should_fail_doc "$arg" && exit 1
     vault=$(flag_val --vault "$@") || vault=""
     ids=$(resolve_ids "$arg" "$vault")
     [ -z "$ids" ] && exit 1
@@ -171,6 +191,7 @@ fi
 
 if [ "$cmd" = document ] && [ "$sub" = get ]; then
     arg="${3:-}"
+    should_fail_doc "$arg" && exit 1
     vault=$(flag_val --vault "$@") || vault=""
     out=$(flag_val --out-file "$@") || out=""
     ids=$(resolve_ids "$arg" "$vault")

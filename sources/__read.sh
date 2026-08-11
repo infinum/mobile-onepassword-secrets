@@ -79,9 +79,12 @@ __read() {
 
         case "$action" in
             found|adopt)
+                # Claim on resolution, not on success: a failed fetch must not
+                # release the id, or the next entry sharing this base name
+                # would adopt the same item and land the wrong secret.
+                claimed="${claimed:+$claimed,}$id"
                 mkdir -p -- "$(dirname -- "$rel")"
                 if op document get "$id" --vault "$vault" --out-file "$rel" --force; then
-                    claimed="${claimed:+$claimed,}$id"
                     echo "[+] $rel (from $vault, document '$title')"
                 else
                     echo "[!] Could not fetch document '$title' from '$vault' for $rel"

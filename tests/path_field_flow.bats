@@ -177,6 +177,32 @@ seed_local_duplicates() {
     [ "$(grep -c "document get" "$OP_LOG")" -eq 1 ]
 }
 
+@test "read does not reuse an item whose download failed" {
+    id=$(seed_op_item v-staging GoogleService-Info.plist staging-doc)
+
+    OP_FAKE_FAIL_DOC_ONCE=$id run bash "$CLI" read
+    [[ "$output" == *"Could not fetch document"* ]]
+
+    # The id was spent on the first entry; reusing it would drop the staging
+    # document into the production path.
+    [ ! -f Production/GoogleService-Info.plist ]
+    [ "$(grep -c "document get" "$OP_LOG")" -eq 1 ]
+}
+
+@test "write does not reuse an item whose upload failed" {
+    seed_local_duplicates
+    id=$(seed_op_item v-staging GoogleService-Info.plist old-content)
+
+    OP_FAKE_FAIL_DOC_ONCE=$id run bash "$CLI" write
+    [[ "$output" == *"Could not upload"* ]]
+
+    # Reusing the id would overwrite the item with the production file and
+    # stamp it with the production path.
+    [ "$(cat "$OP_STATE/items/$id/content")" = "old-content" ]
+    refute test -f "$OP_STATE/items/$id/path"
+    refute grep -q "document edit $id Production/GoogleService-Info.plist" "$OP_LOG"
+}
+
 @test "write uploads a duplicated literal entry only once" {
     cat > secrets.config.json <<'JSON'
 {
