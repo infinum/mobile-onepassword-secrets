@@ -76,6 +76,14 @@ expand_glob_local() {
     return 0
 }
 
+# True if the newline-separated list contains the given line, whole and exact.
+list_contains_line() {
+    case $'\n'"$2"$'\n' in
+        *$'\n'"$1"$'\n'*) return 0 ;;
+    esac
+    return 1
+}
+
 # Safety gate for paths that arrive from a remote 'path' field: they become
 # filesystem write destinations on read, so anything that could escape the
 # repo (absolute, '~', '.' or '..' components) or read as a flag by tools

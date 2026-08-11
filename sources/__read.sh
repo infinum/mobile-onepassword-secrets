@@ -114,7 +114,7 @@ __read() {
     # download each hit to its stamped path. Items without the field can't
     # match a pattern; the safety gate keeps remote-supplied destinations
     # inside the repo.
-    local pat regex matched rpath
+    local pat regex matched rpath dupe_paths reported_dupes=""
     for entry in "${pattern_vaults[@]+"${pattern_vaults[@]}"}"; do
         pat="${entry%:*}"
         vault="${entry##*:}"
@@ -140,11 +140,26 @@ __read() {
             failed=1
             continue
         fi
+        # Paths carried by more than one item in the vault: downloading both
+        # would leave whichever came last on disk, with nothing to say which
+        # secret won. The literal loop gets this from resolve's 'ambiguous'.
+        dupe_paths=$(get_vault_items "$vault" | jq -r '
+            [ .[] | (.fields // [])[] | select(.label == "path") | .value ]
+            | group_by(.) | map(select(length > 1) | .[0]) | .[]')
+
         matched=0
         while IFS=$'\t' read -r id rpath; do
             [[ -z "$id" ]] && continue
             printf '%s\n' "$rpath" | grep -Eq "$regex" || continue
             matched=$((matched + 1))
+            if list_contains_line "$rpath" "$dupe_paths"; then
+                if ! list_contains_line "$rpath" "$reported_dupes"; then
+                    reported_dupes="${reported_dupes:+$reported_dupes$'\n'}$rpath"
+                    echo "[!] Skipping $rpath: more than one document in '$vault' is stamped '$rpath' — remove the duplicate in 1Password."
+                    failed=1
+                fi
+                continue
+            fi
             case ",$claimed," in *",$id,"*) continue ;; esac
             if ! is_safe_rel_path "$rpath"; then
                 echo "[!] Refusing unsafe path from document in '$vault': $rpath"

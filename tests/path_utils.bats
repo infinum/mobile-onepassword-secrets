@@ -93,6 +93,19 @@ Vault/Keys/sub/c.swift" ]
     rm -rf "$WORKDIR"
 }
 
+# --- list_contains_line ------------------------------------------------------
+
+@test "list_contains_line matches whole lines only" {
+    list="Vault/a.plist
+Vault/sub/b.plist"
+    list_contains_line 'Vault/a.plist' "$list"
+    list_contains_line 'Vault/sub/b.plist' "$list"
+    refute list_contains_line 'Vault/a' "$list"
+    refute list_contains_line 'a.plist' "$list"
+    refute list_contains_line 'Vault/c.plist' "$list"
+    refute list_contains_line 'Vault/a.plist' ""
+}
+
 # --- is_safe_rel_path --------------------------------------------------------
 
 @test "is_safe_rel_path rejects traversal and absolute paths" {

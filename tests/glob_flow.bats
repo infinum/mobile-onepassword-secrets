@@ -191,6 +191,26 @@ JSON
     [[ "$output" == *"Pattern matched no documents in 'v-staging': Certs/"* ]]
 }
 
+@test "read refuses to pick a winner between duplicate stamped paths" {
+    cat > .secrets.config.json <<'JSON'
+{
+  "vaults": [
+    { "vault": "v-staging", "files": ["Vault/**"] }
+  ]
+}
+JSON
+    seed_op_item v-staging a.plist first Vault/a.plist > /dev/null
+    seed_op_item v-staging a.plist second Vault/a.plist > /dev/null
+    seed_op_item v-staging b.plist fine Vault/b.plist > /dev/null
+
+    run bash "$CLI" read
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"more than one document in 'v-staging' is stamped 'Vault/a.plist'"* ]]
+    [ ! -f Vault/a.plist ]
+    [ "$(cat Vault/b.plist)" = "fine" ]
+    refute grep -q -- "--out-file Vault/a.plist" "$OP_LOG"
+}
+
 @test "read lists a pattern-only vault once per run" {
     cat > .secrets.config.json <<'JSON'
 {
