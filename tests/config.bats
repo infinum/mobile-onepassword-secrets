@@ -30,6 +30,28 @@ setup() {
     printf '%s\n' "${vault_aliases[@]}" | grep -qx "production:project-projectname-ios"
 }
 
+@test "load_config lists a shared vault once, in first-seen order" {
+    tmp="$(mktemp)"
+    cat > "$tmp" <<'JSON'
+{"vaults":[
+  {"name":"staging","vault":"v-staging","files":["a.txt"]},
+  {"name":"stagingda","vault":"v-staging","files":["b.txt"]},
+  {"name":"production","vault":"v-prod","files":["c.txt"]}
+]}
+JSON
+    load_config "$tmp"
+    rm -f "$tmp"
+
+    [ "${#vaults[@]}" -eq 2 ]
+    [ "${vaults[0]}" = "v-staging" ]
+    [ "${vaults[1]}" = "v-prod" ]
+
+    # Both labels still route to the shared vault, and every file keeps it.
+    printf '%s\n' "${vault_aliases[@]}" | grep -qx "staging:v-staging"
+    printf '%s\n' "${vault_aliases[@]}" | grep -qx "stagingda:v-staging"
+    [ "${#file_vaults[@]}" -eq 3 ]
+}
+
 @test "load_config fails on invalid JSON" {
     tmp="$(mktemp)"
     echo "{ not json" > "$tmp"

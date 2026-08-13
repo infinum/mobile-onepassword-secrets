@@ -74,10 +74,15 @@ load_config() {
         return 1
     fi
 
-    # 1Password vault names (used for access detection / the doctor table).
+    # The distinct 1Password vaults (used for access detection and the doctor
+    # table), in first-seen order. Several entries may share a vault — two
+    # environments pointing at one staging vault, say — and each vault should
+    # be listed and access-checked once, not once per entry.
     vaults=()
     while IFS= read -r line; do vaults+=("$line"); done \
-        < <(jq -r '.vaults[].vault' "$config_path")
+        < <(jq -r '[.vaults[].vault]
+                   | reduce .[] as $v ([]; if index($v) then . else . + [$v] end)
+                   | .[]' "$config_path")
 
     # "relpath:vault" per literal file, "pattern:vault" per glob/folder entry.
     # Consumed by read (fetch/match) and write (route/expand).

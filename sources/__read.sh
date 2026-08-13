@@ -94,7 +94,8 @@ __read() {
                 # would adopt the same item and land the wrong secret.
                 claimed="${claimed:+$claimed,}$id"
                 mkdir -p -- "$(dirname -- "$rel")"
-                if op document get "$id" --vault "$vault" --out-file "$rel" --force; then
+                # op echoes the path it wrote; our own [+] line says it better.
+                if op document get "$id" --vault "$vault" --out-file "$rel" --force >/dev/null; then
                     echo "[+] $rel (from $vault, document '$title')"
                 else
                     echo "[!] Could not fetch document '$title' from '$vault' for $rel"
@@ -174,7 +175,7 @@ __read() {
             fi
             claimed="${claimed:+$claimed,}$id"
             mkdir -p -- "$(dirname -- "$rpath")"
-            if op document get "$id" --vault "$vault" --out-file "$rpath" --force; then
+            if op document get "$id" --vault "$vault" --out-file "$rpath" --force >/dev/null; then
                 echo "[+] $rpath (from $vault, pattern '$pat')"
             else
                 echo "[!] Could not fetch document for $rpath from '$vault'"

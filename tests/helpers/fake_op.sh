@@ -214,6 +214,8 @@ if [ "$cmd" = document ] && [ "$sub" = get ]; then
     if [ -n "$out" ]; then
         mkdir -p "$(dirname "$out")"
         cp "$STATE/items/$ids/content" "$out"
+        # Real `op` announces the file it wrote, on stdout.
+        printf '%s\n' "$PWD/$out"
     else
         cat "$STATE/items/$ids/content"
     fi

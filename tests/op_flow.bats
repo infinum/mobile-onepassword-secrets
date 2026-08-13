@@ -57,6 +57,15 @@ seed_configured_docs() {
     grep -q "document get item0003 --vault v-prod --out-file Keys/Keys.production.swift --force" "$OP_LOG"
 }
 
+@test "read prints one line per file, not op's output-path chatter" {
+    seed_configured_docs
+
+    run bash "$CLI" read
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[+] Keys/Keys.staging.swift (from v-staging"* ]]
+    [[ "$output" != *"$WORKDIR/Keys/Keys.staging.swift"* ]]
+}
+
 @test "read <label> restricts to that vault" {
     seed_configured_docs
 

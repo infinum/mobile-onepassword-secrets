@@ -61,6 +61,22 @@ SHIM
     [[ "$output" == *"not signed in"* ]]
 }
 
+@test "doctor checks a shared vault once per access table" {
+    cat > "$WORKDIR/.secrets.config.json" <<'JSON'
+{"vaults":[
+  {"name":"staging","vault":"v-shared","files":["a.txt"]},
+  {"name":"stagingda","vault":"v-shared","files":["b.txt"]},
+  {"name":"test","vault":"v-shared","files":["c.txt"]},
+  {"name":"production","vault":"v-prod","files":["d.txt"]}
+]}
+JSON
+    run bash "$CLI" doctor
+    # Once under "Vault access (read)", once under "Vault access (write)".
+    [ "$(echo "$output" | grep -c 'v-shared')" -eq 2 ]
+    [ "$(echo "$output" | grep -c 'v-prod')" -eq 2 ]
+    [[ "$output" == *"2 vault(s)"* ]]
+}
+
 @test "doctor does not hang when op is unresponsive (bounded probe)" {
     # An op that hangs forever must not hang doctor: the bounded probe kills it.
     cat > "$WORKDIR/bin/op" <<'SHIM'

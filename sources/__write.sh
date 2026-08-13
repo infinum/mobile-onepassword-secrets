@@ -173,7 +173,7 @@ __write() {
                 # release the id, or the next file sharing this base name would
                 # adopt the same item and overwrite it with the wrong secret.
                 claimed="${claimed:+$claimed,}$id"
-                if ! op document edit "$id" "$file" --vault "$vault"; then
+                if ! op document edit "$id" "$file" --vault "$vault" >/dev/null; then
                     echo "[!] Could not upload $file to '$vault'"
                     failed=1
                     continue
