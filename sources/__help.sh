@@ -16,13 +16,12 @@ Commands:
                  Optionally filter to a single vault (name or label).
   write [vault]  Upload each configured file to its vault.
                  Optionally filter to a single vault (name or label).
-  doctor         Diagnose setup: op/jq installed, signed in, config valid,
-                 and per-vault read/write access. (alias: status)
+  doctor         Diagnose setup: signed in, config valid, and per-vault
+                 read/write access. (alias: status)
 
 Options:
   -h, --help    Show this help message.
   -v, --version Show the installed version.
-  --update      Update $CLI_NAME to the latest version.
 
 Examples:
   $CLI_NAME init

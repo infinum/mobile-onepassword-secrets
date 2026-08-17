@@ -19,13 +19,26 @@ config. A vault owns a set of files, and `read`/`write` sync them.
 
 ## Getting started
 
+Install with [Homebrew](https://brew.sh) from
+[Infinum's tap](https://github.com/infinum/homebrew-tap):
+
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/infinum/mobile-onepassword-secrets/main/install.sh)"
+brew install infinum/tap/app-secrets
 ```
 
-The installer picks a writable directory on your `PATH` (defaulting to
-`/usr/local/bin`) and drops the `app-secrets` entry point there. Update later
-with `app-secrets --update`.
+Or tap first, then install by the short name:
+
+```bash
+brew tap infinum/tap
+brew install app-secrets
+```
+
+This also installs `op` and `jq` if you don't already have them. Update to the
+latest version at any time with:
+
+```bash
+brew upgrade app-secrets
+```
 
 Setting up a new project end to end (vaults, team access, CI) is covered in
 [docs/project-setup.md](docs/project-setup.md); moving an existing project off
@@ -116,8 +129,12 @@ against a fake `op` on `PATH`:
 
 ```bash
 bats tests/
-shellcheck app-secrets.sh install.sh sources/*.sh sources/helpers/*.sh
+shellcheck app-secrets.sh sources/*.sh sources/helpers/*.sh
 ```
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE).
 
 ## Credits
 

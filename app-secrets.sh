@@ -7,7 +7,8 @@ SOURCES_DIR="${APP_SECRETS_SOURCES:-/usr/local/bin/.app-secrets-sources}"
 
 if [[ ! -d "$SOURCES_DIR" ]]; then
     echo "Error: sources directory not found at $SOURCES_DIR" >&2
-    echo "Reinstall app-secrets, or set APP_SECRETS_SOURCES." >&2
+    echo "Install app-secrets via Homebrew (brew install infinum/tap/app-secrets)," >&2
+    echo "or set APP_SECRETS_SOURCES for local development." >&2
     exit 1
 fi
 
@@ -24,9 +25,6 @@ case "${1:-}" in
         ;;
     -v|--version)
         echo "$CLI_NAME $VERSION"
-        ;;
-    --update)
-        __script_auto_update
         ;;
     init)
         shift
