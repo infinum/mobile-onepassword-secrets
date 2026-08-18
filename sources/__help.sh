@@ -16,8 +16,8 @@ Commands:
                  Optionally filter to a single vault (name or label).
   write [vault]  Upload each configured file to its vault.
                  Optionally filter to a single vault (name or label).
-  doctor         Diagnose setup: signed in, config valid, and per-vault
-                 read/write access. (alias: status)
+  doctor         Diagnose setup: op installed, signed in, config valid, and
+                 per-vault read/write access. (alias: status)
 
 Options:
   -h, --help    Show this help message.

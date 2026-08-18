@@ -15,33 +15,50 @@ __doctor() {
     echo "${title//?/=}"
     echo
 
-    # 1. 1Password sign-in. Bounded so a locked/unresponsive op can't hang doctor.
-    echo "1Password session:"
-    local signed_in=false
-    local rc=0
-    op_signed_in 8 || rc=$?
-    if [[ "$rc" -eq 0 ]]; then
-        if is_service_account; then
-            echo "  $ok signed in (service account)"
-        else
-            echo "  $ok signed in"
-        fi
-        signed_in=true
-    elif [[ "$rc" -eq 124 ]]; then
-        echo "  $bad 1Password did not respond in time — unlock the 1Password app, then run 'op signin'"
-        failures=$((failures + 1))
-    elif op_bounded 8 op vault list; then
-        # `op whoami` only reports an established session; real commands
-        # can still authorize through the desktop-app integration.
-        echo "  $ok signed in (via 1Password app integration)"
-        signed_in=true
+    # 1. Tooling. jq is a guaranteed Homebrew dependency, so only op is checked
+    #    here — it's cask-only, and Homebrew formulae can't auto-install a cask.
+    echo "Tooling:"
+    local op_installed=true
+    if command -v op >/dev/null 2>&1; then
+        echo "  $ok op (1Password CLI) installed"
     else
-        echo "  $bad not signed in — run 'op signin' (or set OP_SERVICE_ACCOUNT_TOKEN)"
+        echo "  $bad op not installed — brew install --cask 1password-cli"
         failures=$((failures + 1))
+        op_installed=false
     fi
     echo
 
-    # 2. Config
+    # 2. 1Password sign-in. Bounded so a locked/unresponsive op can't hang doctor.
+    echo "1Password session:"
+    local signed_in=false
+    if [[ "$op_installed" = true ]]; then
+        local rc=0
+        op_signed_in 8 || rc=$?
+        if [[ "$rc" -eq 0 ]]; then
+            if is_service_account; then
+                echo "  $ok signed in (service account)"
+            else
+                echo "  $ok signed in"
+            fi
+            signed_in=true
+        elif [[ "$rc" -eq 124 ]]; then
+            echo "  $bad 1Password did not respond in time — unlock the 1Password app, then run 'op signin'"
+            failures=$((failures + 1))
+        elif op_bounded 8 op vault list; then
+            # `op whoami` only reports an established session; real commands
+            # can still authorize through the desktop-app integration.
+            echo "  $ok signed in (via 1Password app integration)"
+            signed_in=true
+        else
+            echo "  $bad not signed in — run 'op signin' (or set OP_SERVICE_ACCOUNT_TOKEN)"
+            failures=$((failures + 1))
+        fi
+    else
+        echo "  - skipped (op not installed)"
+    fi
+    echo
+
+    # 3. Config
     echo "Config:"
     local config_path
     if ! config_path=$(find_config); then
@@ -74,7 +91,7 @@ __doctor() {
     fi
     echo
 
-    # 3. Vault access (needs op + sign-in)
+    # 4. Vault access (needs op + sign-in)
     echo "Vault access (read):"
     if [[ "$signed_in" = true ]]; then
         print_vault_access can_access_vault

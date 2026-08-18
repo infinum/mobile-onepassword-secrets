@@ -33,8 +33,16 @@ brew tap infinum/tap
 brew install app-secrets
 ```
 
-This also installs `op` and `jq` if you don't already have them. Update to the
-latest version at any time with:
+This also installs `jq` if you don't already have it. `op` (the 1Password CLI)
+can't be pulled in automatically — it's only distributed as a Homebrew
+[cask](https://formulae.brew.sh/cask/1password-cli), and a formula can't
+depend on one — so install it separately if needed:
+
+```bash
+brew install --cask 1password-cli
+```
+
+Update to the latest version at any time with:
 
 ```bash
 brew upgrade app-secrets
