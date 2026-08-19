@@ -2,7 +2,7 @@
 
 Passwords, API keys, secure tokens, and confidential data are secrets — they
 don't belong in the repository. We store them in [1Password](https://1password.com)
-and sync them with local files using [`infinum-secrets`](../README.md), which
+and sync them with local files using [`app-secrets`](../README.md), which
 wraps the [1Password CLI (`op`)](https://developer.1password.com/docs/cli/).
 
 This guide covers setting up a **new project**. For moving an existing project
@@ -43,7 +43,7 @@ brew install jq
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/infinum/mobile-onepassword-secrets/main/install.sh)"
 ```
 
-Update the CLI later with `infinum-secrets --update`.
+Update the CLI later with `app-secrets --update`.
 
 ## 4. Lay out the secret files
 
@@ -60,6 +60,7 @@ MyApp/SupportingFiles/Vault/
  │    GoogleService-Info.staging.plist
 ```
 
+> [!IMPORTANT]
 > **No `.shared` files.** The old single `Keys.shared.swift` with
 > `#if DEVELOPMENT / #elseif STAGING` branching doesn't fit a two-vault split.
 > Use one file per environment and let the Xcode target pick the right file
@@ -74,9 +75,11 @@ from the old workflow; the storage backend is 1Password.
 In the project root:
 
 ```bash
-infinum-secrets init      # scaffolds .secrets.config.json and opens it
-infinum-secrets doctor    # checks op/jq, sign-in, and per-vault access
+app-secrets init      # scaffolds .secrets.config.json and opens it
 ```
+
+Optionally run `app-secrets doctor` to confirm the tooling, your sign-in,
+and per-vault access before going further. It only reports; it changes nothing.
 
 `.secrets.config.json` is vault-centric — each vault owns the files that
 belong to it. Entries can be literal paths or glob/folder patterns; with a
@@ -106,9 +109,9 @@ field keeps same-named files apart.
 ## 6. Daily usage
 
 ```bash
-infinum-secrets read              # download every configured file to its path
-infinum-secrets write             # upload every configured local file
-infinum-secrets read staging      # scope either command to one vault
+app-secrets read              # download every configured file to its path
+app-secrets write             # upload every configured local file
+app-secrets read staging      # scope either command to one vault
 ```
 
 `write` previews the upload and asks for confirmation when run interactively.
@@ -126,30 +129,15 @@ no prompts.
    with the token (marked secret so it never prints in logs).
 3. Add two script steps right after `git clone`:
 
-   **Step A — install tooling** (idempotent):
+   **Step A — install tooling**. Re-running is safe: `brew install` on an
+   already-installed package warns and moves on.
 
    ```bash
    #!/usr/bin/env bash
    set -e
-
-   if ! command -v brew &> /dev/null; then
-       echo "Homebrew could not be found, please install it first."
-       exit 1
-   fi
-
-   if ! command -v op &> /dev/null; then
-       brew install 1password-cli
-   fi
-
-   if ! command -v jq &> /dev/null; then
-       brew install jq
-   fi
-
-   if command -v infinum-secrets &> /dev/null; then
-       infinum-secrets --update
-   else
-       /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/infinum/mobile-onepassword-secrets/main/install.sh)"
-   fi
+   brew install --cask 1password-cli
+   brew install jq
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/infinum/mobile-onepassword-secrets/main/install.sh)"
    ```
 
    **Step B — fetch secrets**:
@@ -158,9 +146,10 @@ no prompts.
    #!/usr/bin/env bash
    set -e
    # OP_SERVICE_ACCOUNT_TOKEN authenticates op non-interactively
-   infinum-secrets read
+   app-secrets read
    ```
 
+> [!WARNING]
 > **One secrets source on CI.** There is no dual Vault / 1Password support:
 > the migration replaces the Vault CI steps outright. If an older release
 > branch needs CI builds after the switch, cherry-pick the migration commits

@@ -2,7 +2,7 @@
 
 The legacy [HashiCorp Vault](https://www.vaultproject.io) workflow (a `.vault/`
 folder with `read.sh`/`write.sh` calling `vault.infinum.co`) is deprecated in
-favor of 1Password + [`infinum-secrets`](../README.md). New projects should
+favor of 1Password + [`app-secrets`](../README.md). New projects should
 follow [Project setup](project-setup.md) from day one; this guide moves an
 existing project over.
 
@@ -27,26 +27,27 @@ the same project.
    `Keys.production.swift`) and update Xcode target membership / Build
    Settings.
 
-4. **Install the CLI and create the config**: `infinum-secrets init` in the
+4. **Install the CLI and create the config**: `app-secrets init` in the
    project root, then map each environment's files to its vault in
    `.secrets.config.json`. With per-environment folders, folder shorthand
    (`Configurations/Staging/`) or suffix patterns (`Vault/**/*.staging.*`)
    keep the config short — see the
    [README's typical setups](../README.md#typical-setups).
-   Validate with `infinum-secrets doctor`: it must show a signed-in session
+   Validate with `app-secrets doctor`: it must show a signed-in session
    and ✓ read/write access on every configured vault before you continue.
 
-5. **Upload with `infinum-secrets write`.** Review the preview line by line —
+5. **Upload with `app-secrets write`.** Review the preview line by line —
    every expected file, each targeting the right vault, nothing extra.
 
 6. **Verify the round-trip**: move the local secret files aside, run
-   `infinum-secrets read`, and compare the restored files against the copies
+   `app-secrets read`, and compare the restored files against the copies
    (`diff -rq`). Contents must be identical.
 
 7. **Switch CI to 1Password.** Replace the Vault read step with the two
    script steps from [Project setup](project-setup.md#7-ci-bitrise) and add
    the `OP_SERVICE_ACCOUNT_TOKEN` secret.
 
+   > [!WARNING]
    > **No dual Vault / 1Password support on CI.** The 1Password steps replace
    > the Vault steps outright — don't add branch-detection logic that keeps
    > both alive. If an older release branch needs CI builds after the switch,
@@ -60,15 +61,17 @@ the same project.
 
 ## Agent-assisted migration
 
-Steps 2–8 are mechanical enough to delegate. Paste everything below the line
-into an agent (e.g. Claude Code) opened at the project you want to migrate —
-it discovers the legacy scripts, generates the config, and walks the upload
-and verification with you.
+Steps 2–8 are mechanical enough to delegate. Expand the block below, copy it
+whole, and paste it into an agent (e.g. Claude Code) opened at the project you
+want to migrate — it discovers the legacy scripts, generates the config, and
+walks the upload and verification with you.
 
----
+<details>
+<summary><b>Migration prompt</b> — click to expand, then copy the whole block</summary>
 
+````markdown
 Migrate this project's secret-file syncing from the legacy HashiCorp Vault
-scripts to [`infinum-secrets`](https://github.com/infinum/mobile-onepassword-secrets),
+scripts to [`app-secrets`](https://github.com/infinum/mobile-onepassword-secrets),
 which syncs the same files with 1Password vaults via a `.secrets.config.json`.
 
 **The legacy workflow you are replacing** usually looks like this: a `.vault/`
@@ -115,7 +118,7 @@ The script constants say what *should* exist; the local tree says what a
 
 ## Step 2 — Decide where the config lives and re-root the paths
 
-`.secrets.config.json` belongs where the team will run `infinum-secrets`
+`.secrets.config.json` belongs where the team will run `app-secrets`
 (usually the repo root; in a monorepo it can be a subproject folder). The
 legacy scripts' `path` is often relative to the repo root and may include a
 subproject prefix — recompute every file path **relative to the config's
@@ -141,7 +144,7 @@ created and by whom, then continue once they exist.
 
 ## Step 4 — Generate the config
 
-Run `infinum-secrets init --no-open` in the chosen directory (or create the
+Run `app-secrets init --no-open` in the chosen directory (or create the
 file by hand following the README) and fill in one entry per vault. Prefer
 **folder shorthand** per environment when the installed tool supports patterns
 (see the README's *Glob / folder patterns* section) — new secret files then
@@ -161,7 +164,7 @@ sync without config edits:
 If the installed version predates pattern support, list every file explicitly
 with its full relative path instead.
 
-Validate with `infinum-secrets doctor`: it checks tooling, sign-in, and prints
+Validate with `app-secrets doctor`: it checks tooling, sign-in, and prints
 the per-vault read/write access matrix. Resolve ✗ rows (access, naming) with
 the runner before continuing.
 
@@ -171,7 +174,7 @@ Make sure the local files are current: if the runner has a working
 `VAULT_AUTH_TOKEN`, run the legacy `read.sh` one last time; otherwise have the
 runner confirm the local files are the latest.
 
-Then run `infinum-secrets write`. **Review the preview line by line with the
+Then run `app-secrets write`. **Review the preview line by line with the
 runner before confirming**: every expected file present, each targeting the
 agreed vault, nothing extra.
 
@@ -179,7 +182,7 @@ agreed vault, nothing extra.
 
 1. Copy the secret files aside to a temp directory (outside the repo).
 2. Delete the local secret files.
-3. Run `infinum-secrets read`.
+3. Run `app-secrets read`.
 4. `diff -q` (or `diff -rq` on the folders) each restored file against its
    copy. Contents must be identical; report the result. If anything differs
    or is missing, restore from the copies and investigate before retrying.
@@ -194,7 +197,7 @@ agreed vault, nothing extra.
   Vault/1Password branch-detection to CI: older branches that need builds
   cherry-pick the migration commits instead.
 - Verify `.gitignore` still covers all secret paths.
-- Add a short note to the project README: how to install `infinum-secrets`
+- Add a short note to the project README: how to install `app-secrets`
   and that `read`/`write` replace the old scripts.
 
 ## Final report
@@ -202,3 +205,6 @@ agreed vault, nothing extra.
 Summarize for the runner: the environment→vault mapping, how many files per
 vault, the doctor access matrix, the round-trip verification result, and
 which cleanup items are done vs. pending.
+````
+
+</details>
