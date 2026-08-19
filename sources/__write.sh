@@ -21,6 +21,31 @@ __write_usage() {
     return 0
 }
 
+# Queues one file for upload, ignoring a file:vault pair that is already
+# queued — a duplicated config entry would otherwise create a second item
+# stamped with the same path. Also records the vault the first time it is
+# seen, so its access check and item list happen once per run.
+#
+# Operates on __write's upload_paths / upload_vaults / target_vaults arrays
+# (bash scoping makes the caller's locals visible here).
+queue_upload() {
+    local rel_path="$1" vault="$2" i queued
+    for i in ${upload_paths[@]+"${!upload_paths[@]}"}; do
+        if [[ "${upload_paths[$i]}" == "$rel_path" && "${upload_vaults[$i]}" == "$vault" ]]; then
+            return 0
+        fi
+    done
+    upload_paths+=("$rel_path")
+    upload_vaults+=("$vault")
+    for queued in "${target_vaults[@]+"${target_vaults[@]}"}"; do
+        if [[ "$queued" == "$vault" ]]; then
+            return 0
+        fi
+    done
+    target_vaults+=("$vault")
+    return 0
+}
+
 __write() {
     local arg="${1:-}"
     if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
@@ -48,85 +73,55 @@ __write() {
     fi
 
     # Collect files that exist locally (and match the optional vault filter).
-    # Dedupe repeats of the same file:vault pair — a duplicated entry would
-    # otherwise create a second item stamped with the same path.
-    local -a up_files=() up_vaults=() needed=()
-    local entry rel vault existing e dup j
+    local -a upload_paths=() upload_vaults=() target_vaults=()
+    local entry rel_path vault
     for entry in "${file_vaults[@]+"${file_vaults[@]}"}"; do
-        rel="${entry%:*}"
+        rel_path="${entry%:*}"
         vault="${entry##*:}"
         [[ -n "$vault_filter" && "$vault" != "$vault_filter" ]] && continue
 
-        if [[ ! -f "$rel" ]]; then
-            echo "[!] Local file missing, skipping: $rel"
+        if [[ ! -f "$rel_path" ]]; then
+            echo "[!] Local file missing, skipping: $rel_path"
             continue
         fi
-        dup=false
-        for j in ${up_files[@]+"${!up_files[@]}"}; do
-            if [[ "${up_files[$j]}" == "$rel" && "${up_vaults[$j]}" == "$vault" ]]; then
-                dup=true
-                break
-            fi
-        done
-        [[ "$dup" == true ]] && continue
-        up_files+=("$rel")
-        up_vaults+=("$vault")
-        existing=false
-        for e in "${needed[@]+"${needed[@]}"}"; do
-            [[ "$e" == "$vault" ]] && { existing=true; break; }
-        done
-        [[ "$existing" = false ]] && needed+=("$vault")
+        queue_upload "$rel_path" "$vault"
     done
 
     # Expand glob/folder patterns against the local tree; matches join the
     # upload list unless an explicit entry already claimed them.
-    local pat matches m dup j
+    local pattern matches match
     for entry in "${pattern_vaults[@]+"${pattern_vaults[@]}"}"; do
-        pat="${entry%:*}"
+        pattern="${entry%:*}"
         vault="${entry##*:}"
         [[ -n "$vault_filter" && "$vault" != "$vault_filter" ]] && continue
 
-        matches=$(expand_glob_local "$pat")
+        matches=$(expand_glob_local "$pattern")
         if [[ -z "$matches" ]]; then
-            echo "[!] Pattern matched no local files: $pat"
+            echo "[!] Pattern matched no local files: $pattern"
             continue
         fi
-        while IFS= read -r m; do
-            if ! is_safe_rel_path "$m"; then
-                echo "[!] Skipping unsafe local match for pattern $pat: $m"
+        while IFS= read -r match; do
+            if ! is_safe_rel_path "$match"; then
+                echo "[!] Skipping unsafe local match for pattern $pattern: $match"
                 continue
             fi
-            dup=false
-            for j in ${up_files[@]+"${!up_files[@]}"}; do
-                if [[ "${up_files[$j]}" == "$m" && "${up_vaults[$j]}" == "$vault" ]]; then
-                    dup=true
-                    break
-                fi
-            done
-            [[ "$dup" == true ]] && continue
-            up_files+=("$m")
-            up_vaults+=("$vault")
-            existing=false
-            for e in "${needed[@]+"${needed[@]}"}"; do
-                [[ "$e" == "$vault" ]] && { existing=true; break; }
-            done
-            [[ "$existing" = false ]] && needed+=("$vault")
+            queue_upload "$match" "$vault"
         done <<< "$matches"
     done
 
-    if [[ "${#up_files[@]}" -eq 0 ]]; then
+    if [[ "${#upload_paths[@]}" -eq 0 ]]; then
         echo "No local files to upload."
         exit 1
     fi
 
     # Write-access check for the vaults actually needed.
-    for vault in "${needed[@]+"${needed[@]}"}"; do
+    for vault in "${target_vaults[@]+"${target_vaults[@]}"}"; do
         detect_vault_access can_write_vault "write" "$vault"
     done
 
     # Warm the per-vault item cache in this shell: resolution below runs in
     # command substitutions (subshells), which inherit but can't fill it.
-    for vault in "${needed[@]+"${needed[@]}"}"; do
+    for vault in "${target_vaults[@]+"${target_vaults[@]}"}"; do
         get_vault_items "$vault" > /dev/null
     done
 
@@ -134,9 +129,9 @@ __write() {
     echo
     echo "The following will be uploaded:"
     local i title
-    for i in "${!up_files[@]}"; do
-        title=$(doc_title_for "${up_files[$i]}")
-        echo "  [+] ${up_files[$i]} → ${up_vaults[$i]} (document '$title')"
+    for i in "${!upload_paths[@]}"; do
+        title=$(doc_title_for "${upload_paths[$i]}")
+        echo "  [+] ${upload_paths[$i]} → ${upload_vaults[$i]} (document '$title')"
     done
 
     # Confirm only when interactive; automation (CI) proceeds.
@@ -159,9 +154,9 @@ __write() {
     # mistake "uploaded nothing" for "uploaded everything".
     local failed=0
     local file verdict action id out new_id claimed=""
-    for i in "${!up_files[@]}"; do
-        file="${up_files[$i]}"
-        vault="${up_vaults[$i]}"
+    for i in "${!upload_paths[@]}"; do
+        file="${upload_paths[$i]}"
+        vault="${upload_vaults[$i]}"
         title=$(doc_title_for "$file")
         verdict=$(resolve_item_for_path "$vault" "$file" "$claimed")
         action="${verdict%% *}"
@@ -223,7 +218,7 @@ __write() {
     # Paths listed literally in the config are left alone: their absence is
     # already reported above as a missing local file.
     local stale_title stale_path idx literal items
-    for vault in "${needed[@]+"${needed[@]}"}"; do
+    for vault in "${target_vaults[@]+"${target_vaults[@]}"}"; do
         items=$(get_vault_items "$vault")
         [[ "$items" == "FAILED" ]] && continue
         while IFS=$'\t' read -r stale_title stale_path; do
@@ -234,11 +229,11 @@ __write() {
                 [[ "$e" == "$stale_path:$vault" ]] && { literal=true; break; }
             done
             [[ "$literal" == true ]] && continue
-            for idx in "${!up_files[@]}"; do
-                [[ "${up_vaults[$idx]}" == "$vault" ]] || continue
-                [[ "${up_files[$idx]}" != "$stale_path" ]] || continue
-                [[ "$(doc_title_for "${up_files[$idx]}")" == "$stale_title" ]] || continue
-                echo "[!] '$vault' still has a document stamped '$stale_path', but there is no local file there — ${up_files[$idx]} looks like where it moved. Delete the old item in 1Password, or read will keep restoring it."
+            for idx in "${!upload_paths[@]}"; do
+                [[ "${upload_vaults[$idx]}" == "$vault" ]] || continue
+                [[ "${upload_paths[$idx]}" != "$stale_path" ]] || continue
+                [[ "$(doc_title_for "${upload_paths[$idx]}")" == "$stale_title" ]] || continue
+                echo "[!] '$vault' still has a document stamped '$stale_path', but there is no local file there — ${upload_paths[$idx]} looks like where it moved. Delete the old item in 1Password, or read will keep restoring it."
                 break
             done
         done < <(printf '%s' "$items" | jq -r '.[] | . as $it | (.fields // [])[]

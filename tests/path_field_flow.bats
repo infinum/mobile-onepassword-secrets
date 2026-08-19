@@ -7,7 +7,7 @@ load helpers/common
 
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
-    CLI="$REPO_ROOT/infinum-secrets.sh"
+    CLI="$REPO_ROOT/app-secrets.sh"
 
     WORKDIR="$(mktemp -d)"
     setup_fake_op "$WORKDIR"
@@ -25,7 +25,7 @@ setup() {
 }
 JSON
 
-    export INFINUM_SECRETS_SOURCES="$REPO_ROOT/sources"
+    export APP_SECRETS_SOURCES="$REPO_ROOT/sources"
     export TERM="${TERM:-xterm}"
     cd "$WORKDIR"
 }
