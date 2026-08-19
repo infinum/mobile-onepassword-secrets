@@ -112,6 +112,8 @@ seed_configured_docs() {
 }
 
 @test "read establishes an op session before checking vault access" {
+    seed_configured_docs
+
     run bash "$CLI" read
     [ "$status" -eq 0 ]
     [ "$(head -1 "$OP_LOG")" = "whoami" ]
@@ -120,6 +122,8 @@ seed_configured_docs() {
 @test "read proceeds when whoami fails but the app integration answers" {
     # `op whoami` only reports an existing session — with the desktop-app
     # integration it can fail while real commands (vault list) authorize fine.
+    seed_configured_docs
+
     OP_FAKE_FAIL_WHOAMI=1 run bash "$CLI" read
     [ "$status" -eq 0 ]
     [ -f "$WORKDIR/Keys/Keys.staging.swift" ]

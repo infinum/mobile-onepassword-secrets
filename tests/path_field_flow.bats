@@ -12,7 +12,7 @@ setup() {
     WORKDIR="$(mktemp -d)"
     setup_fake_op "$WORKDIR"
 
-    cat > "$WORKDIR/secrets.config.json" <<'JSON'
+    cat > "$WORKDIR/.secrets.config.json" <<'JSON'
 {
   "vaults": [
     { "name": "staging", "vault": "v-staging",
@@ -229,7 +229,7 @@ JSON
 }
 
 @test "write uploads a duplicated literal entry only once" {
-    cat > secrets.config.json <<'JSON'
+    cat > .secrets.config.json <<'JSON'
 {
   "vaults": [
     { "vault": "v-staging",

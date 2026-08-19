@@ -11,6 +11,8 @@
 # print `{}` (no id) to exercise the caller's unparseable-id fallback;
 # OP_FAKE_FAIL_ITEM_LIST=1 makes `item list` fail (transient op outage);
 # OP_FAKE_FAIL_WHOAMI=1 makes `whoami` fail (no usable session);
+# OP_FAKE_FAIL_VAULT_LIST=1 makes `vault list` fail, so that with
+# OP_FAKE_FAIL_WHOAMI the app-integration fallback has nothing to authorize on;
 # OP_FAKE_FAIL_DOC=<id> makes `document get/edit` fail for that one item;
 # OP_FAKE_FAIL_DOC_ONCE=<id> fails only the first `document get/edit` for it,
 # so a caller that reuses the id afterwards is caught;
@@ -91,11 +93,13 @@ cmd="${1:-}"
 sub="${2:-}"
 
 if [ "$cmd" = whoami ]; then
+    [ "${OP_FAKE_FAIL_WHOAMI:-}" = 1 ] && exit 1
     echo '{"user_uuid":"u1"}'
     exit 0
 fi
 
 if [ "$cmd" = vault ] && [ "$sub" = list ]; then
+    [ "${OP_FAKE_FAIL_VAULT_LIST:-}" = 1 ] && exit 1
     echo '[{"name":"v-staging"},{"name":"v-prod"}]'
     exit 0
 fi

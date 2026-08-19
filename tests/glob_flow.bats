@@ -11,7 +11,7 @@ setup() {
     WORKDIR="$(mktemp -d)"
     setup_fake_op "$WORKDIR"
 
-    cat > "$WORKDIR/secrets.config.json" <<'JSON'
+    cat > "$WORKDIR/.secrets.config.json" <<'JSON'
 {
   "vaults": [
     { "name": "staging", "vault": "v-staging",
@@ -58,7 +58,7 @@ teardown() {
 }
 
 @test "explicit entry overlapping a glob uploads once" {
-    cat > secrets.config.json <<'JSON'
+    cat > .secrets.config.json <<'JSON'
 {
   "vaults": [
     { "vault": "v-staging",
@@ -109,7 +109,7 @@ JSON
 }
 
 @test "read refuses unsafe stored paths" {
-    cat > secrets.config.json <<'JSON'
+    cat > .secrets.config.json <<'JSON'
 {
   "vaults": [
     { "vault": "v-staging", "files": ["**"] }
@@ -161,7 +161,7 @@ JSON
 }
 
 @test "read fetches a document once when explicit and glob entries overlap" {
-    cat > secrets.config.json <<'JSON'
+    cat > .secrets.config.json <<'JSON'
 {
   "vaults": [
     { "vault": "v-staging", "files": ["Keys/Keys.staging.swift", "Keys/**"] }
@@ -265,7 +265,7 @@ JSON
 }
 
 @test "read <label> skips patterns for other vaults" {
-    cat > secrets.config.json <<'JSON'
+    cat > .secrets.config.json <<'JSON'
 {
   "vaults": [
     { "name": "staging", "vault": "v-staging", "files": ["Keys/Keys.staging.swift"] },
@@ -284,7 +284,7 @@ JSON
 }
 
 @test "write <label> skips patterns for other vaults" {
-    cat > secrets.config.json <<'JSON'
+    cat > .secrets.config.json <<'JSON'
 {
   "vaults": [
     { "name": "staging", "vault": "v-staging", "files": ["Keys/Keys.staging.swift"] },
