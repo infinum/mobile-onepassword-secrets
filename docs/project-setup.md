@@ -38,12 +38,11 @@ Every team member needs:
 ## 3. Install the tooling
 
 ```bash
-brew install --cask 1password-cli
-brew install jq
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/infinum/mobile-onepassword-secrets/main/install.sh)"
+brew install infinum/tap/app-secrets   # pulls in jq
+brew install --cask 1password-cli      # op is cask-only, so it installs separately
 ```
 
-Update the CLI later with `app-secrets --update`.
+Update the CLI later with `brew upgrade app-secrets`.
 
 ## 4. Lay out the secret files
 
@@ -135,9 +134,8 @@ no prompts.
    ```bash
    #!/usr/bin/env bash
    set -e
+   brew install infinum/tap/app-secrets
    brew install --cask 1password-cli
-   brew install jq
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/infinum/mobile-onepassword-secrets/main/install.sh)"
    ```
 
    **Step B — fetch secrets**:

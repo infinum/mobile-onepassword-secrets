@@ -13,8 +13,10 @@ config. A vault owns a set of files, and `read`/`write` sync them.
 ## Requirements
 
 - [`op`](https://developer.1password.com/docs/cli/get-started/), the 1Password
-  CLI — `brew install --cask 1password-cli`
-- [`jq`](https://jqlang.github.io/jq/) — `brew install jq`
+  CLI — `brew install --cask 1password-cli`. It is cask-only, so the formula
+  cannot pull it in for you.
+- [`jq`](https://jqlang.github.io/jq/) — comes with the formula. You only
+  install it yourself (`brew install jq`) when running from a checkout.
 - `bash` 3.2 or newer (the macOS system bash is fine)
 
 ## Getting started

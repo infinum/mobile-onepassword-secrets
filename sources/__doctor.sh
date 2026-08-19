@@ -19,10 +19,7 @@ __doctor() {
     #    here — it's cask-only, and Homebrew formulae can't auto-install a cask.
     echo "Tooling:"
     local op_installed=true
-    if command -v op >/dev/null 2>&1; then
-        echo "  $ok op (1Password CLI) installed"
-    else
-        echo "  $bad op not installed — brew install --cask 1password-cli"
+    if ! report_tool op; then
         failures=$((failures + 1))
         op_installed=false
     fi
