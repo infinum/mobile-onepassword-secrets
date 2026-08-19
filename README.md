@@ -1,10 +1,5 @@
 # app-secrets
 
-<!--
-    This is the status area for the project.
-    Add project badges (if needed) to this part of the file.
--->
-
 ## Description
 
 `app-secrets` is a small command-line tool that syncs project secrets
