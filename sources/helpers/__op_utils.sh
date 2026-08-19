@@ -6,19 +6,53 @@
 # Helper functions for 1Password interaction. Sourcing is side-effect-free;
 # call require_tools / setup_styles explicitly.
 
+# How to install each external CLI we depend on, and what to call it in
+# output. Single source of truth: require_tools fails fast on the first
+# missing tool, doctor reports every tool and tallies, but neither spells
+# out an install command of its own.
+tool_install_hint() {
+    case "$1" in
+        op) printf '%s' "brew install --cask 1password-cli" ;;
+        jq) printf '%s' "brew install jq" ;;
+        *)  printf '%s' "brew install $1" ;;
+    esac
+}
+
+# Human-readable name for a tool, empty when the command name says it all.
+tool_label() {
+    case "$1" in
+        op) printf '%s' "1Password CLI" ;;
+    esac
+}
+
 # Verifies required CLIs are installed. Call before any op-dependent command.
 require_tools() {
-    if ! command -v op >/dev/null 2>&1; then
-        echo "Error: 1Password CLI 'op' is required but not installed." >&2
-        echo "Install with: brew install --cask 1password-cli" >&2
+    local t
+    for t in op jq; do
+        command -v "$t" >/dev/null 2>&1 && continue
+        echo "Error: '$t' is required but not installed." >&2
+        echo "Install with: $(tool_install_hint "$t")" >&2
         return 1
-    fi
-    if ! command -v jq >/dev/null 2>&1; then
-        echo "Error: 'jq' is required but not installed." >&2
-        echo "Install with: brew install jq" >&2
-        return 1
-    fi
+    done
     return 0
+}
+
+# Prints doctor's one-line verdict for a single tool and returns non-zero
+# when it is missing, so the caller can count the failure. Needs
+# setup_styles to have run.
+report_tool() {
+    local t="$1" label
+    local ok="${green}✓${reset}" bad="${red}✗${reset}"
+    label="$(tool_label "$t")"
+    if [[ -n "$label" ]]; then
+        label=" ($label)"
+    fi
+    if command -v "$t" >/dev/null 2>&1; then
+        echo "  $ok $t$label installed"
+        return 0
+    fi
+    echo "  $bad $t not installed — $(tool_install_hint "$t")"
+    return 1
 }
 
 # Runs a command with a hard timeout, killing it (SIGKILL) if it overruns.

@@ -1,8 +1,8 @@
 # tests/init.bats
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
-    export INFINUM_SECRETS_SOURCES="$REPO_ROOT/sources"
-    CLI="$REPO_ROOT/infinum-secrets.sh"
+    export APP_SECRETS_SOURCES="$REPO_ROOT/sources"
+    CLI="$REPO_ROOT/app-secrets.sh"
     WORKDIR="$(mktemp -d)"
     cd "$WORKDIR"
 }
@@ -43,9 +43,9 @@ EOF
     chmod +x "$WORKDIR/opener.sh"
 }
 
-@test "init opens the created config via INFINUM_SECRETS_OPENER" {
+@test "init opens the created config via APP_SECRETS_OPENER" {
     make_opener
-    INFINUM_SECRETS_OPENER="$WORKDIR/opener.sh" run bash "$CLI" init
+    APP_SECRETS_OPENER="$WORKDIR/opener.sh" run bash "$CLI" init
     [ "$status" -eq 0 ]
     [ -f "$WORKDIR/opened.txt" ]
     opened="$(cat "$WORKDIR/opened.txt")"
@@ -55,7 +55,7 @@ EOF
 
 @test "init --no-open does not open the config" {
     make_opener
-    INFINUM_SECRETS_OPENER="$WORKDIR/opener.sh" run bash "$CLI" init --no-open
+    APP_SECRETS_OPENER="$WORKDIR/opener.sh" run bash "$CLI" init --no-open
     [ "$status" -eq 0 ]
     [ ! -f "$WORKDIR/opened.txt" ]
 }

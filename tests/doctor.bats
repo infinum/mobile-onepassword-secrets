@@ -1,8 +1,8 @@
 # tests/doctor.bats
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
-    export INFINUM_SECRETS_SOURCES="$REPO_ROOT/sources"
-    CLI="$REPO_ROOT/infinum-secrets.sh"
+    export APP_SECRETS_SOURCES="$REPO_ROOT/sources"
+    CLI="$REPO_ROOT/app-secrets.sh"
     WORKDIR="$(mktemp -d)"
 
     # Fast op shim so the session probe is deterministic and never touches the

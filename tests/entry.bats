@@ -1,13 +1,13 @@
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
-    export INFINUM_SECRETS_SOURCES="$REPO_ROOT/sources"
-    CLI="$REPO_ROOT/infinum-secrets.sh"
+    export APP_SECRETS_SOURCES="$REPO_ROOT/sources"
+    CLI="$REPO_ROOT/app-secrets.sh"
 }
 
 @test "--version prints name and version" {
     run bash "$CLI" --version
     [ "$status" -eq 0 ]
-    [[ "$output" == "infinum-secrets "* ]]
+    [[ "$output" == "app-secrets "* ]]
 }
 
 @test "unsupported command exits non-zero" {
@@ -25,7 +25,7 @@ setup() {
 @test "--help prints usage and lists commands" {
     run bash "$CLI" --help
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Usage: infinum-secrets"* ]]
+    [[ "$output" == *"Usage: app-secrets"* ]]
     [[ "$output" == *"read"* ]]
     [[ "$output" == *"write"* ]]
     [[ "$output" == *"init"* ]]

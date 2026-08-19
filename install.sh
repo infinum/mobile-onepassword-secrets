@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# install.sh — Install infinum-secrets to a writable directory on PATH.
+# install.sh — Install app-secrets to a writable directory on PATH.
 # Usage:  bash install.sh [--silent]
 # --silent skips the confirmation prompt (used by --update).
 
 set -euo pipefail
 
 REPO_URL="https://github.com/infinum/mobile-onepassword-secrets.git"
-BIN_NAME="infinum-secrets"
-SOURCES_NAME=".infinum-secrets-sources"
+BIN_NAME="app-secrets"
+SOURCES_NAME=".app-secrets-sources"
 
 SILENT=false
 [[ "${1:-}" == "--silent" ]] && SILENT=true
@@ -72,7 +72,7 @@ main() {
 
     # The installed entry must default to the installed sources dir.
     # shellcheck disable=SC2086
-    $use_sudo sed -i.bak "s|/usr/local/bin/.infinum-secrets-sources|$bindir/$SOURCES_NAME|g" "$bindir/$BIN_NAME"
+    $use_sudo sed -i.bak "s|/usr/local/bin/.app-secrets-sources|$bindir/$SOURCES_NAME|g" "$bindir/$BIN_NAME"
     # shellcheck disable=SC2086
     $use_sudo rm -f "$bindir/$BIN_NAME.bak"
 

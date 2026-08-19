@@ -6,7 +6,7 @@
 
 setup() {
     REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
-    CLI="$REPO_ROOT/infinum-secrets.sh"
+    CLI="$REPO_ROOT/app-secrets.sh"
 
     WORKDIR="$(mktemp -d)"
     SHIMBIN="$WORKDIR/bin"
@@ -61,7 +61,7 @@ SHIM
 }
 JSON
 
-    export INFINUM_SECRETS_SOURCES="$REPO_ROOT/sources"
+    export APP_SECRETS_SOURCES="$REPO_ROOT/sources"
     export OP_LOG
     export PATH="$SHIMBIN:$PATH"
     export TERM="${TERM:-xterm}"

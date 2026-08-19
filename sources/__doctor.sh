@@ -10,24 +10,18 @@ __doctor() {
     local bad="${red}✗${reset}"
     local failures=0
 
-    echo "infinum-secrets doctor"
-    echo "======================"
+    local title="$CLI_NAME doctor"
+    echo "$title"
+    echo "${title//?/=}"
     echo
 
-    # 1. Tooling
+    # 1. Tooling. report_tool owns the wording and the install hint so this
+    #    stays in step with require_tools (sources/helpers/__op_utils.sh).
     echo "Tooling:"
-    if command -v op >/dev/null 2>&1; then
-        echo "  $ok op (1Password CLI) installed"
-    else
-        echo "  $bad op not installed — brew install --cask 1password-cli"
-        failures=$((failures + 1))
-    fi
-    if command -v jq >/dev/null 2>&1; then
-        echo "  $ok jq installed"
-    else
-        echo "  $bad jq not installed — brew install jq"
-        failures=$((failures + 1))
-    fi
+    local t
+    for t in op jq; do
+        report_tool "$t" || failures=$((failures + 1))
+    done
     echo
 
     # 2. 1Password sign-in. Bounded so a locked/unresponsive op can't hang doctor.

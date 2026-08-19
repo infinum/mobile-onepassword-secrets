@@ -3,11 +3,11 @@
 set -euo pipefail
 
 # Resolve library dir. Installed default; override for dev/tests.
-SOURCES_DIR="${INFINUM_SECRETS_SOURCES:-/usr/local/bin/.infinum-secrets-sources}"
+SOURCES_DIR="${APP_SECRETS_SOURCES:-/usr/local/bin/.app-secrets-sources}"
 
 if [[ ! -d "$SOURCES_DIR" ]]; then
     echo "Error: sources directory not found at $SOURCES_DIR" >&2
-    echo "Reinstall infinum-secrets, or set INFINUM_SECRETS_SOURCES." >&2
+    echo "Reinstall app-secrets, or set APP_SECRETS_SOURCES." >&2
     exit 1
 fi
 

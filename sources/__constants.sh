@@ -3,5 +3,5 @@
 # (vars consumed by entry point + sourcing scripts)
 
 VERSION="1.0.0"
-CLI_NAME="infinum-secrets"
+CLI_NAME="app-secrets"
 CONFIG_FILE_NAME=".secrets.config.json"

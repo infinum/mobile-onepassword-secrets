@@ -6,12 +6,12 @@
 
 # Best-effort open of the freshly created config. Never fails init.
 # Opener resolution:
-#   1. $INFINUM_SECRETS_OPENER — explicit override, always honored.
+#   1. $APP_SECRETS_OPENER — explicit override, always honored.
 #   2. $VISUAL / $EDITOR, then `open` (macOS) / `xdg-open` (Linux) — but only
 #      when attached to an interactive terminal (so CI never tries to open).
 __init_open() {
     local file="$1"
-    local opener="${INFINUM_SECRETS_OPENER:-}"
+    local opener="${APP_SECRETS_OPENER:-}"
     if [[ -n "$opener" ]]; then
         # shellcheck disable=SC2086
         $opener "$file" || true

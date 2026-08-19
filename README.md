@@ -1,4 +1,4 @@
-# infinum-secrets
+# app-secrets
 
 CLI to sync project secrets between local files and 1Password vaults, driven by a
 per-project `secrets.config.json`. Stack-agnostic — works for iOS, Android, or any
@@ -16,17 +16,17 @@ project that keeps secret files in the repo.
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/infinum/mobile-onepassword-secrets/main/install.sh)"
 ```
 
-Update later with `infinum-secrets --update`.
+Update later with `app-secrets --update`.
 
 ## Usage
 
 ```bash
-infinum-secrets init          # scaffold secrets.config.json
-infinum-secrets doctor        # check tooling, sign-in, vault access
-infinum-secrets read          # download every configured file to its path
-infinum-secrets read <vault>  # only one vault (its name or friendly label)
-infinum-secrets write         # upload every configured file that exists locally
-infinum-secrets write <vault> # only one vault
+app-secrets init          # scaffold secrets.config.json
+app-secrets doctor        # check tooling, sign-in, vault access
+app-secrets read          # download every configured file to its path
+app-secrets read <vault>  # only one vault (its name or friendly label)
+app-secrets write         # upload every configured file that exists locally
+app-secrets write <vault> # only one vault
 ```
 
 ## Authentication
@@ -89,7 +89,7 @@ Example for a nested layout (e.g. iOS):
 Run from the repo without installing:
 
 ```bash
-INFINUM_SECRETS_SOURCES=./sources ./infinum-secrets.sh --help
+APP_SECRETS_SOURCES=./sources ./app-secrets.sh --help
 ```
 
 Run tests (requires `bats-core`: `brew install bats-core`):
