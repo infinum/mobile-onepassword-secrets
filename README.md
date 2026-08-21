@@ -52,10 +52,6 @@ Update to the latest version at any time with:
 brew upgrade app-secrets
 ```
 
-Setting up a new project end to end (vaults, team access, CI) is covered in
-[docs/project-setup.md](docs/project-setup.md); moving an existing project off
-the legacy Vault workflow in [docs/migrate-from-vault.md](docs/migrate-from-vault.md).
-
 ## Usage
 
 ```bash
