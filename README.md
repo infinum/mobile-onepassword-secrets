@@ -21,7 +21,16 @@ config. A vault owns a set of files, and `read`/`write` sync them.
 
 ## Getting started
 
-Install with [Homebrew](https://brew.sh) from
+First install `op` (the 1Password CLI) — it can't be pulled in automatically
+because it's only distributed as a Homebrew
+[cask](https://formulae.brew.sh/cask/1password-cli), and a formula can't
+depend on one:
+
+```bash
+brew install --cask 1password-cli
+```
+
+Then install the tool with [Homebrew](https://brew.sh) from
 [Infinum's tap](https://github.com/infinum/homebrew-tap):
 
 ```bash
@@ -35,14 +44,7 @@ brew tap infinum/tap
 brew install app-secrets
 ```
 
-This also installs `jq` if you don't already have it. `op` (the 1Password CLI)
-can't be pulled in automatically — it's only distributed as a Homebrew
-[cask](https://formulae.brew.sh/cask/1password-cli), and a formula can't
-depend on one — so install it separately if needed:
-
-```bash
-brew install --cask 1password-cli
-```
+This also installs `jq` if you don't already have it.
 
 Update to the latest version at any time with:
 
