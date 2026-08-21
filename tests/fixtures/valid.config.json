@@ -1,0 +1,14 @@
+{
+  "vaults": [
+    {
+      "name": "staging",
+      "vault": "project-projectname-ios-staging",
+      "files": ["Keys/Keys.staging.swift", "Config/Config.dev.json"]
+    },
+    {
+      "name": "production",
+      "vault": "project-projectname-ios",
+      "files": ["Keys/Keys.production.swift"]
+    }
+  ]
+}
