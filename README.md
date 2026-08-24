@@ -37,7 +37,19 @@ Then install the tool with [Homebrew](https://brew.sh) from
 brew install infinum/tap/app-secrets
 ```
 
-Or tap first, then install by the short name:
+Or tap first, then install by the short name.
+That single command taps the repository if needed and records trust for the
+formula, so no separate `brew tap` or `brew trust` step is required.
+
+Homebrew 6.0 refuses to load formulae from non-official taps until they are
+trusted, so installing by the short name needs a one-time `brew trust` per
+machine:
+
+```sh
+brew tap infinum/tap
+brew trust infinum/tap
+brew install app-secrets
+```
 
 ```bash
 brew tap infinum/tap
