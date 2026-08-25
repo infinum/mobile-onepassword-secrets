@@ -15,13 +15,16 @@ __doctor() {
     echo "${title//?/=}"
     echo
 
-    # 1. Tooling. jq is a guaranteed Homebrew dependency, so only op is checked
-    #    here — it's cask-only, and Homebrew formulae can't auto-install a cask.
+    # 1. Tooling. The Homebrew formula depends on jq, but the npm package and
+    #    checkouts don't, and op is cask-only so no channel can install it.
     echo "Tooling:"
     local op_installed=true
     if ! report_tool op; then
         failures=$((failures + 1))
         op_installed=false
+    fi
+    if ! report_tool jq; then
+        failures=$((failures + 1))
     fi
     echo
 
