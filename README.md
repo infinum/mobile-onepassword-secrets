@@ -13,10 +13,13 @@ config. A vault owns a set of files, and `read`/`write` sync them.
 ## Requirements
 
 - [`op`](https://developer.1password.com/docs/cli/get-started/), the 1Password
-  CLI — `brew install --cask 1password-cli`. It is cask-only, so the formula
-  cannot pull it in for you.
-- [`jq`](https://jqlang.github.io/jq/) — comes with the formula. You only
-  install it yourself (`brew install jq`) when running from a checkout.
+  CLI. It is cask-only, so the Homebrew formula cannot pull it in for you:
+  `brew install --cask 1password-cli` on macOS, or follow 1Password's
+  [Linux install guide](https://developer.1password.com/docs/cli/get-started/)
+  on CI.
+- [`jq`](https://jqlang.github.io/jq/) — comes with the Homebrew formula. With
+  the npm package or a checkout, install it yourself (`brew install jq`,
+  `apt-get install jq`, ...).
 - `bash` 3.2 or newer (the macOS system bash is fine)
 
 ## Getting started
@@ -30,38 +33,48 @@ depend on one:
 brew install --cask 1password-cli
 ```
 
-Then install the tool with [Homebrew](https://brew.sh) from
-[Infinum's tap](https://github.com/infinum/homebrew-tap):
+### Installation
+
+#### Homebrew
+
+This script is distributed via [Homebrew](https://brew.sh) through Infinum's tap:
 
 ```bash
 brew install infinum/tap/app-secrets
 ```
 
-Or tap first, then install by the short name.
-That single command taps the repository if needed and records trust for the
-formula, so no separate `brew tap` or `brew trust` step is required.
+Homebrew 6.0+ requires trusting non-official taps before installing from them,
+so if that command fails or prompts you to trust the tap, tap and trust it
+explicitly first, then install:
 
-Homebrew 6.0 refuses to load formulae from non-official taps until they are
-trusted, so installing by the short name needs a one-time `brew trust` per
-machine:
-
-```sh
+```bash
 brew tap infinum/tap
 brew trust infinum/tap
 brew install app-secrets
 ```
 
-```bash
-brew tap infinum/tap
-brew install app-secrets
-```
-
 This also installs `jq` if you don't already have it.
 
-Update to the latest version at any time with:
+#### npm
+
+The same script is also published to npm as
+[`@infinum/app-secrets`](https://www.npmjs.com/package/@infinum/app-secrets):
 
 ```bash
+npm install -g @infinum/app-secrets
+```
+
+Unlike the formula, the npm package does not install `jq` or `op` — install
+both first (see [Requirements](#requirements)), then run `app-secrets doctor`
+to confirm the tooling is in place.
+
+#### Update
+
+Script can be updated by running:
+```bash
 brew upgrade app-secrets
+# or, for npm installations
+npm update -g @infinum/app-secrets
 ```
 
 ## Usage
@@ -136,12 +149,15 @@ in, and which vaults you can read and write.
 ## Development
 
 Plain `bash` (3.2+, so it runs on the stock macOS shell) with no build step; it
-only shells out to `op` and `jq`. Point `APP_SECRETS_SOURCES` at the local
-`sources/` directory to run without installing:
+only shells out to `op` and `jq`. The entry point picks up the `sources/`
+directory next to it, so a checkout runs without installing:
 
 ```bash
-APP_SECRETS_SOURCES=./sources ./app-secrets.sh doctor
+./app-secrets.sh doctor
 ```
+
+Set `APP_SECRETS_SOURCES` to point it at a different `sources/` directory
+(the Homebrew wrapper and the tests do this).
 
 The suite uses [`bats-core`](https://github.com/bats-core/bats-core)
 (`brew install bats-core`) and exercises `read`/`write`/`doctor` end-to-end
@@ -151,6 +167,26 @@ against a fake `op` on `PATH`:
 bats tests/
 shellcheck app-secrets.sh sources/*.sh sources/helpers/*.sh
 ```
+
+## Releasing
+
+Releases are cut with `scripts/release.sh`, which keeps the version in
+`sources/__constants.sh` and `package.json` in sync and publishes to both
+Homebrew and npm. The version is typed exactly once:
+
+```bash
+scripts/release.sh prepare 1.1.0   # runs bats + shellcheck, bumps the version, opens a PR
+# ... merge the PR ...
+git checkout main && git pull
+scripts/release.sh publish         # tags, creates the GitHub release, publishes to npm, opens the tap PR
+```
+
+Both commands accept `--dry-run` (print what would happen) and `--direct` (push
+to the protected branch instead of opening a PR, for maintainers with bypass
+rights); `prepare` also accepts `--skip-tests`. `publish` skips any step that
+has already been done, so it can be re-run safely after a failure.
+Requirements: `gh` and `npm` authenticated, `bats-core` and `shellcheck`
+installed, and the `infinum/tap` tap installed locally.
 
 ## License
 
