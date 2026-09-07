@@ -11,11 +11,17 @@
 # missing tool, doctor reports every tool and tallies, but neither spells
 # out an install command of its own.
 tool_install_hint() {
-    case "$1" in
-        op) printf '%s' "brew install --cask 1password-cli" ;;
-        jq) printf '%s' "brew install jq" ;;
-        *)  printf '%s' "brew install $1" ;;
-    esac
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        case "$1" in
+            op) printf '%s' "brew install --cask 1password-cli" ;;
+            *)  printf '%s' "brew install $1" ;;
+        esac
+    else
+        case "$1" in
+            op) printf '%s' "see https://developer.1password.com/docs/cli/get-started/" ;;
+            *)  printf '%s' "install $1 with your package manager (e.g. apt-get install $1)" ;;
+        esac
+    fi
 }
 
 # Human-readable name for a tool, empty when the command name says it all.

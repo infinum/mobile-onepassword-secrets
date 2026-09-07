@@ -2,13 +2,27 @@
 
 set -euo pipefail
 
-# Resolve library dir. Installed default; override for dev/tests.
-SOURCES_DIR="${APP_SECRETS_SOURCES:-/usr/local/bin/.app-secrets-sources}"
+# Resolve library dir. APP_SECRETS_SOURCES wins when set (Homebrew's env
+# wrapper, dev, tests). Otherwise use the sources/ directory next to this
+# script - following symlinks first, since npm installs the command as a
+# symlink into its bin directory.
+if [[ -z "${APP_SECRETS_SOURCES:-}" ]]; then
+    _self="${BASH_SOURCE[0]}"
+    while [[ -L "$_self" ]]; do
+        _dir="$(cd "$(dirname "$_self")" && pwd)"
+        _self="$(readlink "$_self")"
+        [[ "$_self" == /* ]] || _self="$_dir/$_self"
+    done
+    APP_SECRETS_SOURCES="$(cd "$(dirname "$_self")" && pwd)/sources"
+    unset _self _dir
+fi
+SOURCES_DIR="$APP_SECRETS_SOURCES"
 
 if [[ ! -d "$SOURCES_DIR" ]]; then
     echo "Error: sources directory not found at $SOURCES_DIR" >&2
-    echo "Install app-secrets via Homebrew (brew install infinum/tap/app-secrets)," >&2
-    echo "or set APP_SECRETS_SOURCES for local development." >&2
+    echo "Reinstall app-secrets (brew install infinum/tap/app-secrets, or" >&2
+    echo "npm install -g @infinum/app-secrets), or point APP_SECRETS_SOURCES" >&2
+    echo "at a checkout's sources/ directory." >&2
     exit 1
 fi
 
