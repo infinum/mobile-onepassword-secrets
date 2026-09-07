@@ -1,8 +1,14 @@
 {
   "name": "@infinum/app-secrets",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Sync project secrets between local files and 1Password vaults",
-  "keywords": ["1password", "secrets", "cli", "mobile", "ci"],
+  "keywords": [
+    "1password",
+    "secrets",
+    "cli",
+    "mobile",
+    "ci"
+  ],
   "homepage": "https://github.com/infinum/mobile-onepassword-secrets",
   "bugs": "https://github.com/infinum/mobile-onepassword-secrets/issues",
   "repository": {
@@ -18,7 +24,10 @@
     "app-secrets.sh",
     "sources/"
   ],
-  "os": ["darwin", "linux"],
+  "os": [
+    "darwin",
+    "linux"
+  ],
   "publishConfig": {
     "access": "public"
   }
